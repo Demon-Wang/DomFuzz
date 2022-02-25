@@ -105,7 +105,7 @@ endif
 	$(CXX) $(CFLAGS) $(CPPFLAGS) `$(LLVM_CONFIG) --cxxflags` -fno-rtti -fPIC -std=$(LLVM_STDCXX) -c $< -o $@ 
 
 ../afl-llvm-dict2file.so:	afl-llvm-dict2file.so.cc ../afl-llvm-common.o | test_deps
-	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) instrumentation/afl-llvm-common.o
+	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) ../afl-llvm-common.o
 
 
 
