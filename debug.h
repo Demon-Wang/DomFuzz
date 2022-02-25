@@ -255,4 +255,15 @@
     if (_res != _len) RPFATAL(_res, "Short read from %s", fn); \
   } while (0)
 
+#define DEBUGF(x...)                                    \
+  do {                                                  \
+                                                        \
+    fprintf(stderr, cMGN "[D] " cBRI "DEBUG: " cRST x); \
+    fprintf(stderr, cRST "");                           \
+                                                        \
+  } while (0)
+
 #endif /* ! _HAVE_DEBUG_H */
+
+/* Show a prefixed debug output. */
+
