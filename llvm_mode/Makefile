@@ -109,7 +109,27 @@ endif
 ../afl-llvm-dict2file.so:	afl-llvm-dict2file.so.cc ../afl-llvm-common.o | test_deps
 	$(CXX) $(CLANG_CPPFL)  -shared $< -o $@ $(CLANG_LFL) ../afl-llvm-common.o
 
+../afl-ld-lto: afl-ld-lto.c
+ifeq "$(LLVM_LTO)" "1"
+	$(CC) $(CFLAGS) $(CPPFLAGS) $< -o $@
+endif
 
+./SanitizerCoverageLTO.so: instrumentation/SanitizerCoverageLTO.so.cc
+ifeq "$(LLVM_LTO)" "1"
+	$(CXX) $(CLANG_CPPFL) -Wno-writable-strings -fno-rtti -fPIC -std=$(LLVM_STDCXX) -shared $< -o $@ $(CLANG_LFL) instrumentation/afl-llvm-common.o
+	$(CLANG_BIN) $(CFLAGS_SAFE) $(CPPFLAGS) -Wno-unused-result -O0 $(AFL_CLANG_FLTO) -fPIC -c instrumentation/afl-llvm-rt-lto.o.c -o ./afl-llvm-rt-lto.o
+	@$(CLANG_BIN) $(CFLAGS_SAFE) $(CPPFLAGS) -Wno-unused-result -O0 $(AFL_CLANG_FLTO) -m64 -fPIC -c instrumentation/afl-llvm-rt-lto.o.c -o ./afl-llvm-rt-lto-64.o 2>/dev/null; if [ "$$?" = "0" ]; then : ; fi
+	@$(CLANG_BIN) $(CFLAGS_SAFE) $(CPPFLAGS) -Wno-unused-result -O0 $(AFL_CLANG_FLTO) -m32 -fPIC -c instrumentation/afl-llvm-rt-lto.o.c -o ./afl-llvm-rt-lto-32.o 2>/dev/null; if [ "$$?" = "0" ]; then : ; fi
+endif
+
+# laf
+./split-switches-pass.so:	instrumentation/split-switches-pass.so.cc instrumentation/afl-llvm-common.o | test_deps
+	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) instrumentation/afl-llvm-common.o
+./compare-transform-pass.so:	instrumentation/compare-transform-pass.so.cc instrumentation/afl-llvm-common.o | test_deps
+	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) instrumentation/afl-llvm-common.o
+./split-compares-pass.so:	instrumentation/split-compares-pass.so.cc instrumentation/afl-llvm-common.o | test_deps
+	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) instrumentation/afl-llvm-common.o
+# /laf
 
 test_build: $(PROGS)
 	@echo "[*] Testing the CC wrapper and instrumentation output..."
