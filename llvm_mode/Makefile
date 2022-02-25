@@ -47,6 +47,9 @@ ifeq "$(LLVM_NEW_API)" "1"
   LLVM_STDCXX = c++14
 endif
 
+CLANG_CPPFL  = `$(LLVM_CONFIG) --cxxflags` -fno-rtti -fPIC $(CXXFLAGS) -Wno-deprecated-declarations
+CLANG_LFL    = `$(LLVM_CONFIG) --ldflags` $(LDFLAGS)
+
 # User teor2345 reports that this is required to make things work on MacOS X.
 
 ifeq "$(shell uname)" "Darwin"
@@ -105,7 +108,7 @@ endif
 	$(CXX) $(CFLAGS) $(CPPFLAGS) `$(LLVM_CONFIG) --cxxflags` -fno-rtti -fPIC -std=$(LLVM_STDCXX) -c $< -o $@ 
 
 ../afl-llvm-dict2file.so:	afl-llvm-dict2file.so.cc ../afl-llvm-common.o | test_deps
-	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) ../afl-llvm-common.o
+	$(CXX) $(CLANG_CPPFL)  -shared $< -o $@ $(CLANG_LFL) ../afl-llvm-common.o
 
 
 
