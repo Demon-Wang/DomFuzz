@@ -676,7 +676,7 @@ static RegisterPass<AFLdict2filePass> X("afl-dict2file",
                                         false, false);
 
 static RegisterStandardPasses RegisterAFLdict2filePass(
-    PassManagerBuilder::EP_OptimizerLast, registerAFLdict2filePass);
+    PassManagerBuilder::EP_ModuleOptimizerEarly, registerAFLdict2filePass);
 
 static RegisterStandardPasses RegisterAFLdict2filePass0(
     PassManagerBuilder::EP_EnabledOnOptLevel0, registerAFLdict2filePass);
