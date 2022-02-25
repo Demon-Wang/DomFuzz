@@ -186,7 +186,7 @@ static void registerAFLPass(const PassManagerBuilder &,
 
 
 static RegisterStandardPasses RegisterAFLPass(
-    PassManagerBuilder::EP_ModuleOptimizerEarly, registerAFLPass);
+    PassManagerBuilder::EP_OptimizerLast, registerAFLPass);
 
 static RegisterStandardPasses RegisterAFLPass0(
     PassManagerBuilder::EP_EnabledOnOptLevel0, registerAFLPass);

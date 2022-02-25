@@ -48,7 +48,6 @@ ifeq "$(LLVM_NEW_API)" "1"
 endif
 
 CLANG_CPPFL  = `$(LLVM_CONFIG) --cxxflags` -fno-rtti -fPIC $(CXXFLAGS) -Wno-deprecated-declarations
-CLANG_LFL    = `$(LLVM_CONFIG) --ldflags` $(LDFLAGS)
 
 # User teor2345 reports that this is required to make things work on MacOS X.
 
