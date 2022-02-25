@@ -101,7 +101,7 @@ endif
 	@printf "[*] Building 64-bit variant of the runtime (-m64)... "
 	@$(CC) $(CFLAGS) -m64 -fPIC -c $< -o $@ 2>/dev/null; if [ "$$?" = "0" ]; then echo "success!"; else echo "failed (that's fine)"; fi
 
-../afl-llvm-common.o: instrumentation/afl-llvm-common.cc instrumentation/afl-llvm-common.h
+../afl-llvm-common.o: afl-llvm-common.cc afl-llvm-common.h
 	$(CXX) $(CFLAGS) $(CPPFLAGS) `$(LLVM_CONFIG) --cxxflags` -fno-rtti -fPIC -std=$(LLVM_STDCXX) -c $< -o $@ 
 
 
