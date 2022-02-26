@@ -32,7 +32,7 @@
 #include <math.h>
 #include <sys/mman.h>
 
-#include "debug.h"
+#include "../debug.h"
 #include "alloc-inl.h"
 #include "envs.h"
 #include "common.h"
