@@ -283,6 +283,7 @@ ifeq "$(LLVM_LTO)" "1"
 	@ln -sf afl-cc ./afl-clang-lto
 	@ln -sf afl-cc ./afl-clang-lto++
 endif
+endif
 
 llvm_mode/afl-llvm-common.o: llvm_mode/afl-llvm-common.cc llvm_mode/afl-llvm-common.h
 	$(CXX) $(CFLAGS) $(CPPFLAGS) `$(LLVM_CONFIG) --cxxflags` -fno-rtti -fPIC -std=$(LLVM_STDCXX) -c $< -o $@ 
