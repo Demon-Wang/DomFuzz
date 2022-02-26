@@ -232,17 +232,14 @@ class ModuleSanitizerCoverage {
   // afl++ START
   // const SpecialCaseList *          Allowlist;
   // const SpecialCaseList *          Blocklist;
-  uint32_t                         autodictionary = 0;
   uint32_t                         inst = 0;
   uint32_t                         afl_global_id = 0;
   uint32_t                         unhandled = 0;
   uint32_t                         select_cnt = 0;
-  uint64_t                         map_addr = 0;
   const char *                     skip_nozero = NULL;
   const char *                     use_threadsafe_counters = nullptr;
   std::vector<BasicBlock *>        BlockList;
   DenseMap<Value *, std::string *> valueMap;
-  std::vector<std::string>         dictionary;
   IntegerType *                    Int8Tyi = NULL;
   IntegerType *                    Int32Tyi = NULL;
   IntegerType *                    Int64Tyi = NULL;
@@ -394,7 +391,6 @@ bool ModuleSanitizerCoverage::instrumentModule(
   */
   BlockList.clear();
   valueMap.clear();
-  dictionary.clear();
   C = &(M.getContext());
   DL = &M.getDataLayout();
   CurModule = &M;
@@ -456,56 +452,15 @@ bool ModuleSanitizerCoverage::instrumentModule(
   // we make this the default as the fixed map has problems with
   // defered forkserver, early constructors, ifuncs and maybe more
   /*if (getenv("AFL_LLVM_MAP_DYNAMIC"))*/
-  map_addr = 0;
 
-  if ((ptr = getenv("AFL_LLVM_MAP_ADDR"))) {
-
-    uint64_t val;
-    if (!*ptr || !strcmp(ptr, "0") || !strcmp(ptr, "0x0")) {
-
-      map_addr = 0;
-
-    } else if (getenv("AFL_LLVM_MAP_DYNAMIC")) {
-
-      FATAL(
-          "AFL_LLVM_MAP_ADDR and AFL_LLVM_MAP_DYNAMIC cannot be used together");
-
-    } else if (strncmp(ptr, "0x", 2) != 0) {
-
-      map_addr = 0x10000;  // the default
-
-    } else {
-
-      val = strtoull(ptr, NULL, 16);
-      if (val < 0x100 || val > 0xffffffff00000000) {
-
-        FATAL(
-            "AFL_LLVM_MAP_ADDR must be a value between 0x100 and "
-            "0xffffffff00000000");
-
-      }
-
-      map_addr = val;
-
-    }
-
-  }
 
   /* Get/set the globals for the SHM region. */
 
-  if (!map_addr) {
 
     AFLMapPtr =
         new GlobalVariable(M, PointerType::get(Int8Tyi, 0), false,
                            GlobalValue::ExternalLinkage, 0, "__afl_area_ptr");
 
-  } else {
-
-    ConstantInt *MapAddr = ConstantInt::get(Int64Tyi, map_addr);
-    MapPtrFixed =
-        ConstantExpr::getIntToPtr(MapAddr, PointerType::getUnqual(Int8Tyi));
-
-  }
 
   Zero = ConstantInt::get(Int8Tyi, 0);
   One = ConstantInt::get(Int8Tyi, 1);
@@ -513,474 +468,6 @@ bool ModuleSanitizerCoverage::instrumentModule(
   initInstrumentList();
   scanForDangerousFunctions(&M);
   Mo = &M;
-
-  if (autodictionary) {
-
-    for (auto &F : M) {
-
-      if (!isInInstrumentList(&F, MNAME) || !F.size()) { continue; }
-
-      for (auto &BB : F) {
-
-        for (auto &IN : BB) {
-
-          CallInst *callInst = nullptr;
-          CmpInst * cmpInst = nullptr;
-
-          if ((cmpInst = dyn_cast<CmpInst>(&IN))) {
-
-            Value *      op = cmpInst->getOperand(1);
-            ConstantInt *ilen = dyn_cast<ConstantInt>(op);
-
-            if (ilen && ilen->uge(0xffffffffffffffff) == false) {
-
-              u64 val2 = 0, val = ilen->getZExtValue();
-              u32 len = 0;
-              if (val > 0x10000 && val < 0xffffffff) len = 4;
-              if (val > 0x100000001 && val < 0xffffffffffffffff) len = 8;
-
-              if (len) {
-
-                auto c = cmpInst->getPredicate();
-
-                switch (c) {
-
-                  case CmpInst::FCMP_OGT:  // fall through
-                  case CmpInst::FCMP_OLE:  // fall through
-                  case CmpInst::ICMP_SLE:  // fall through
-                  case CmpInst::ICMP_SGT:
-
-                    // signed comparison and it is a negative constant
-                    if ((len == 4 && (val & 80000000)) ||
-                        (len == 8 && (val & 8000000000000000))) {
-
-                      if ((val & 0xffff) != 1) val2 = val - 1;
-                      break;
-
-                    }
-
-                    // fall through
-
-                  case CmpInst::FCMP_UGT:  // fall through
-                  case CmpInst::FCMP_ULE:  // fall through
-                  case CmpInst::ICMP_UGT:  // fall through
-                  case CmpInst::ICMP_ULE:
-                    if ((val & 0xffff) != 0xfffe) val2 = val + 1;
-                    break;
-
-                  case CmpInst::FCMP_OLT:  // fall through
-                  case CmpInst::FCMP_OGE:  // fall through
-                  case CmpInst::ICMP_SLT:  // fall through
-                  case CmpInst::ICMP_SGE:
-
-                    // signed comparison and it is a negative constant
-                    if ((len == 4 && (val & 80000000)) ||
-                        (len == 8 && (val & 8000000000000000))) {
-
-                      if ((val & 0xffff) != 1) val2 = val - 1;
-                      break;
-
-                    }
-
-                    // fall through
-
-                  case CmpInst::FCMP_ULT:  // fall through
-                  case CmpInst::FCMP_UGE:  // fall through
-                  case CmpInst::ICMP_ULT:  // fall through
-                  case CmpInst::ICMP_UGE:
-                    if ((val & 0xffff) != 1) val2 = val - 1;
-                    break;
-
-                  default:
-                    val2 = 0;
-
-                }
-
-                dictionary.push_back(std::string((char *)&val, len));
-                found++;
-
-                if (val2) {
-
-                  dictionary.push_back(std::string((char *)&val2, len));
-                  found++;
-
-                }
-
-              }
-
-            }
-
-          }
-
-          if ((callInst = dyn_cast<CallInst>(&IN))) {
-
-            bool   isStrcmp = true;
-            bool   isMemcmp = true;
-            bool   isStrncmp = true;
-            bool   isStrcasecmp = true;
-            bool   isStrncasecmp = true;
-            bool   isIntMemcpy = true;
-            bool   isStdString = true;
-            size_t optLen = 0;
-
-            Function *Callee = callInst->getCalledFunction();
-            if (!Callee) continue;
-            if (callInst->getCallingConv() != llvm::CallingConv::C) continue;
-            std::string FuncName = Callee->getName().str();
-
-            isStrcmp &= (!FuncName.compare("strcmp") ||
-                         !FuncName.compare("xmlStrcmp") ||
-                         !FuncName.compare("xmlStrEqual") ||
-                         !FuncName.compare("g_strcmp0") ||
-                         !FuncName.compare("curl_strequal") ||
-                         !FuncName.compare("strcsequal"));
-            isMemcmp &=
-                (!FuncName.compare("memcmp") || !FuncName.compare("bcmp") ||
-                 !FuncName.compare("CRYPTO_memcmp") ||
-                 !FuncName.compare("OPENSSL_memcmp") ||
-                 !FuncName.compare("memcmp_const_time") ||
-                 !FuncName.compare("memcmpct"));
-            isStrncmp &= (!FuncName.compare("strncmp") ||
-                          !FuncName.compare("xmlStrncmp") ||
-                          !FuncName.compare("curl_strnequal"));
-            isStrcasecmp &= (!FuncName.compare("strcasecmp") ||
-                             !FuncName.compare("stricmp") ||
-                             !FuncName.compare("ap_cstr_casecmp") ||
-                             !FuncName.compare("OPENSSL_strcasecmp") ||
-                             !FuncName.compare("xmlStrcasecmp") ||
-                             !FuncName.compare("g_strcasecmp") ||
-                             !FuncName.compare("g_ascii_strcasecmp") ||
-                             !FuncName.compare("Curl_strcasecompare") ||
-                             !FuncName.compare("Curl_safe_strcasecompare") ||
-                             !FuncName.compare("cmsstrcasecmp"));
-            isStrncasecmp &= (!FuncName.compare("strncasecmp") ||
-                              !FuncName.compare("strnicmp") ||
-                              !FuncName.compare("ap_cstr_casecmpn") ||
-                              !FuncName.compare("OPENSSL_strncasecmp") ||
-                              !FuncName.compare("xmlStrncasecmp") ||
-                              !FuncName.compare("g_ascii_strncasecmp") ||
-                              !FuncName.compare("Curl_strncasecompare") ||
-                              !FuncName.compare("g_strncasecmp"));
-
-            isIntMemcpy &= !FuncName.compare("llvm.memcpy.p0i8.p0i8.i64");
-            isStdString &=
-                ((FuncName.find("basic_string") != std::string::npos &&
-                  FuncName.find("compare") != std::string::npos) ||
-                 (FuncName.find("basic_string") != std::string::npos &&
-                  FuncName.find("find") != std::string::npos));
-
-            /* we do something different here, putting this BB and the
-               successors in a block map */
-            if (!FuncName.compare("__afl_persistent_loop")) {
-
-              BlockList.push_back(&BB);
-              for (succ_iterator SI = succ_begin(&BB), SE = succ_end(&BB);
-                   SI != SE; ++SI) {
-
-                BasicBlock *succ = *SI;
-                BlockList.push_back(succ);
-
-              }
-
-            }
-
-            if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp &&
-                !isStrncasecmp && !isIntMemcpy && !isStdString)
-              continue;
-
-            /* Verify the strcmp/memcmp/strncmp/strcasecmp/strncasecmp function
-             * prototype */
-            FunctionType *FT = Callee->getFunctionType();
-
-            isStrcmp &= FT->getNumParams() == 2 &&
-                        FT->getReturnType()->isIntegerTy(32) &&
-                        FT->getParamType(0) == FT->getParamType(1) &&
-                        FT->getParamType(0) ==
-                            IntegerType::getInt8PtrTy(M.getContext());
-            isStrcasecmp &= FT->getNumParams() == 2 &&
-                            FT->getReturnType()->isIntegerTy(32) &&
-                            FT->getParamType(0) == FT->getParamType(1) &&
-                            FT->getParamType(0) ==
-                                IntegerType::getInt8PtrTy(M.getContext());
-            isMemcmp &= FT->getNumParams() == 3 &&
-                        FT->getReturnType()->isIntegerTy(32) &&
-                        FT->getParamType(0)->isPointerTy() &&
-                        FT->getParamType(1)->isPointerTy() &&
-                        FT->getParamType(2)->isIntegerTy();
-            isStrncmp &= FT->getNumParams() == 3 &&
-                         FT->getReturnType()->isIntegerTy(32) &&
-                         FT->getParamType(0) == FT->getParamType(1) &&
-                         FT->getParamType(0) ==
-                             IntegerType::getInt8PtrTy(M.getContext()) &&
-                         FT->getParamType(2)->isIntegerTy();
-            isStrncasecmp &= FT->getNumParams() == 3 &&
-                             FT->getReturnType()->isIntegerTy(32) &&
-                             FT->getParamType(0) == FT->getParamType(1) &&
-                             FT->getParamType(0) ==
-                                 IntegerType::getInt8PtrTy(M.getContext()) &&
-                             FT->getParamType(2)->isIntegerTy();
-            isStdString &= FT->getNumParams() >= 2 &&
-                           FT->getParamType(0)->isPointerTy() &&
-                           FT->getParamType(1)->isPointerTy();
-
-            if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp &&
-                !isStrncasecmp && !isIntMemcpy && !isStdString)
-              continue;
-
-            /* is a str{n,}{case,}cmp/memcmp, check if we have
-             * str{case,}cmp(x, "const") or str{case,}cmp("const", x)
-             * strn{case,}cmp(x, "const", ..) or strn{case,}cmp("const", x, ..)
-             * memcmp(x, "const", ..) or memcmp("const", x, ..) */
-            Value *Str1P = callInst->getArgOperand(0),
-                  *Str2P = callInst->getArgOperand(1);
-            std::string Str1, Str2;
-            StringRef   TmpStr;
-            bool        HasStr1 = getConstantStringInfo(Str1P, TmpStr);
-            if (TmpStr.empty())
-              HasStr1 = false;
-            else
-              Str1 = TmpStr.str();
-            bool HasStr2 = getConstantStringInfo(Str2P, TmpStr);
-            if (TmpStr.empty())
-              HasStr2 = false;
-            else
-              Str2 = TmpStr.str();
-
-            if (debug)
-              fprintf(stderr, "F:%s %p(%s)->\"%s\"(%s) %p(%s)->\"%s\"(%s)\n",
-                      FuncName.c_str(), Str1P, Str1P->getName().str().c_str(),
-                      Str1.c_str(), HasStr1 == true ? "true" : "false", Str2P,
-                      Str2P->getName().str().c_str(), Str2.c_str(),
-                      HasStr2 == true ? "true" : "false");
-
-            // we handle the 2nd parameter first because of llvm memcpy
-            if (!HasStr2) {
-
-              auto *Ptr = dyn_cast<ConstantExpr>(Str2P);
-              if (Ptr && Ptr->isGEPWithNoNotionalOverIndexing()) {
-
-                if (auto *Var = dyn_cast<GlobalVariable>(Ptr->getOperand(0))) {
-
-                  if (Var->hasInitializer()) {
-
-                    if (auto *Array = dyn_cast<ConstantDataArray>(
-                            Var->getInitializer())) {
-
-                      HasStr2 = true;
-                      Str2 = Array->getRawDataValues().str();
-
-                    }
-
-                  }
-
-                }
-
-              }
-
-            }
-
-            // for the internal memcpy routine we only care for the second
-            // parameter and are not reporting anything.
-            if (isIntMemcpy == true) {
-
-              if (HasStr2 == true) {
-
-                Value *      op2 = callInst->getArgOperand(2);
-                ConstantInt *ilen = dyn_cast<ConstantInt>(op2);
-                if (ilen) {
-
-                  uint64_t literalLength = Str2.size();
-                  uint64_t optLength = ilen->getZExtValue();
-                  if (optLength > literalLength + 1) {
-
-                    optLength = Str2.length() + 1;
-
-                  }
-
-                  if (literalLength + 1 == optLength) {
-
-                    Str2.append("\0", 1);  // add null byte
-
-                  }
-
-                }
-
-                valueMap[Str1P] = new std::string(Str2);
-
-                if (debug)
-                  fprintf(stderr, "Saved: %s for %p\n", Str2.c_str(), Str1P);
-                continue;
-
-              }
-
-              continue;
-
-            }
-
-            // Neither a literal nor a global variable?
-            // maybe it is a local variable that we saved
-            if (!HasStr2) {
-
-              std::string *strng = valueMap[Str2P];
-              if (strng && !strng->empty()) {
-
-                Str2 = *strng;
-                HasStr2 = true;
-                if (debug)
-                  fprintf(stderr, "Filled2: %s for %p\n", strng->c_str(),
-                          Str2P);
-
-              }
-
-            }
-
-            if (!HasStr1) {
-
-              auto Ptr = dyn_cast<ConstantExpr>(Str1P);
-
-              if (Ptr && Ptr->isGEPWithNoNotionalOverIndexing()) {
-
-                if (auto *Var = dyn_cast<GlobalVariable>(Ptr->getOperand(0))) {
-
-                  if (Var->hasInitializer()) {
-
-                    if (auto *Array = dyn_cast<ConstantDataArray>(
-                            Var->getInitializer())) {
-
-                      HasStr1 = true;
-                      Str1 = Array->getRawDataValues().str();
-
-                    }
-
-                  }
-
-                }
-
-              }
-
-            }
-
-            // Neither a literal nor a global variable?
-            // maybe it is a local variable that we saved
-            if (!HasStr1) {
-
-              std::string *strng = valueMap[Str1P];
-              if (strng && !strng->empty()) {
-
-                Str1 = *strng;
-                HasStr1 = true;
-                if (debug)
-                  fprintf(stderr, "Filled1: %s for %p\n", strng->c_str(),
-                          Str1P);
-
-              }
-
-            }
-
-            /* handle cases of one string is const, one string is variable */
-            if (!(HasStr1 ^ HasStr2)) continue;
-
-            std::string thestring;
-
-            if (HasStr1)
-              thestring = Str1;
-            else
-              thestring = Str2;
-
-            optLen = thestring.length();
-            if (optLen < 2 || (optLen == 2 && !thestring[1])) { continue; }
-
-            if (isMemcmp || isStrncmp || isStrncasecmp) {
-
-              Value *      op2 = callInst->getArgOperand(2);
-              ConstantInt *ilen = dyn_cast<ConstantInt>(op2);
-
-              if (ilen) {
-
-                uint64_t literalLength = optLen;
-                optLen = ilen->getZExtValue();
-                if (optLen > thestring.length() + 1) {
-
-                  optLen = thestring.length() + 1;
-
-                }
-
-                if (optLen < 2) { continue; }
-                if (literalLength + 1 == optLen) {  // add null byte
-
-                  thestring.append("\0", 1);
-
-                }
-
-              }
-
-            }
-
-            // add null byte if this is a string compare function and a null
-            // was not already added
-            if (!isMemcmp) {
-
-              /*
-                            if (addedNull == false && thestring[optLen - 1] !=
-                 '\0') {
-
-                              thestring.append("\0", 1);  // add null byte
-                              optLen++;
-
-                            }
-
-              */
-              if (!isStdString &&
-                  thestring.find('\0', 0) != std::string::npos) {
-
-                // ensure we do not have garbage
-                size_t offset = thestring.find('\0', 0);
-                if (offset + 1 < optLen) optLen = offset + 1;
-                thestring = thestring.substr(0, optLen);
-
-              }
-
-            }
-
-            if (!be_quiet) {
-
-              std::string outstring;
-              fprintf(stderr, "%s: length %zu/%zu \"", FuncName.c_str(), optLen,
-                      thestring.length());
-              for (uint8_t i = 0; i < thestring.length(); i++) {
-
-                uint8_t c = thestring[i];
-                if (c <= 32 || c >= 127)
-                  fprintf(stderr, "\\x%02x", c);
-                else
-                  fprintf(stderr, "%c", c);
-
-              }
-
-              fprintf(stderr, "\"\n");
-
-            }
-
-            // we take the longer string, even if the compare was to a
-            // shorter part. Note that depending on the optimizer of the
-            // compiler this can be wrong, but it is more likely that this
-            // is helping the fuzzer
-            if (optLen != thestring.length()) optLen = thestring.length();
-            if (optLen > MAX_AUTO_EXTRA) optLen = MAX_AUTO_EXTRA;
-            if (optLen < MIN_AUTO_EXTRA)  // too short? skip
-              continue;
-
-            dictionary.push_back(thestring.substr(0, optLen));
-
-          }
-
-        }
-
-      }
-
-    }
-
-  }
 
   // afl++ END
 
@@ -1009,7 +496,7 @@ bool ModuleSanitizerCoverage::instrumentModule(
   // afl++ START
   if (dFile.is_open()) dFile.close();
 
-  if (!getenv("AFL_LLVM_LTO_DONTWRITEID") || dictionary.size() || map_addr) {
+  if (!getenv("AFL_LLVM_LTO_DONTWRITEID")) {
 
     // yes we could create our own function, insert it into ctors ...
     // but this would be a pain in the butt ... so we use afl-llvm-rt-lto.o
@@ -1038,15 +525,6 @@ bool ModuleSanitizerCoverage::instrumentModule(
     BasicBlock::iterator IP = bb->getFirstInsertionPt();
     IRBuilder<>          IRB(&(*IP));
 
-    if (map_addr) {
-
-      GlobalVariable *AFLMapAddrFixed = new GlobalVariable(
-          M, Int64Tyi, true, GlobalValue::ExternalLinkage, 0, "__afl_map_addr");
-      ConstantInt *MapAddr = ConstantInt::get(Int64Tyi, map_addr);
-      StoreInst *  StoreMapAddr = IRB.CreateStore(MapAddr, AFLMapAddrFixed);
-      ModuleSanitizerCoverage::SetNoSanitizeMetadata(StoreMapAddr);
-
-    }
 
     if (getenv("AFL_LLVM_LTO_DONTWRITEID") == NULL) {
 
@@ -1063,77 +541,6 @@ bool ModuleSanitizerCoverage::instrumentModule(
 
     }
 
-    if (dictionary.size()) {
-
-      size_t memlen = 0, count = 0, offset = 0;
-
-      // sort and unique the dictionary
-      std::sort(dictionary.begin(), dictionary.end());
-      auto last = std::unique(dictionary.begin(), dictionary.end());
-      dictionary.erase(last, dictionary.end());
-
-      for (auto token : dictionary) {
-
-        memlen += token.length();
-        count++;
-
-      }
-
-      if (!be_quiet)
-        printf("AUTODICTIONARY: %lu string%s found\n", count,
-               count == 1 ? "" : "s");
-
-      if (count) {
-
-        auto ptrhld = std::unique_ptr<char[]>(new char[memlen + count]);
-
-        count = 0;
-
-        for (auto token : dictionary) {
-
-          if (offset + token.length() < 0xfffff0 && count < MAX_AUTO_EXTRAS) {
-
-            ptrhld.get()[offset++] = (uint8_t)token.length();
-            memcpy(ptrhld.get() + offset, token.c_str(), token.length());
-            offset += token.length();
-            count++;
-
-          }
-
-        }
-
-        GlobalVariable *AFLDictionaryLen =
-            new GlobalVariable(M, Int32Tyi, false, GlobalValue::ExternalLinkage,
-                               0, "__afl_dictionary_len");
-        ConstantInt *const_len = ConstantInt::get(Int32Tyi, offset);
-        StoreInst *StoreDictLen = IRB.CreateStore(const_len, AFLDictionaryLen);
-        ModuleSanitizerCoverage::SetNoSanitizeMetadata(StoreDictLen);
-
-        ArrayType *ArrayTy = ArrayType::get(IntegerType::get(Ctx, 8), offset);
-        GlobalVariable *AFLInternalDictionary = new GlobalVariable(
-            M, ArrayTy, true, GlobalValue::ExternalLinkage,
-            ConstantDataArray::get(Ctx,
-                                   *(new ArrayRef<char>(ptrhld.get(), offset))),
-            "__afl_internal_dictionary");
-        AFLInternalDictionary->setInitializer(ConstantDataArray::get(
-            Ctx, *(new ArrayRef<char>(ptrhld.get(), offset))));
-        AFLInternalDictionary->setConstant(true);
-
-        GlobalVariable *AFLDictionary = new GlobalVariable(
-            M, PointerType::get(Int8Tyi, 0), false,
-            GlobalValue::ExternalLinkage, 0, "__afl_dictionary");
-
-        Value *AFLDictOff = IRB.CreateGEP(Int8Ty, AFLInternalDictionary, Zero);
-        Value *AFLDictPtr =
-            IRB.CreatePointerCast(AFLDictOff, PointerType::get(Int8Tyi, 0));
-        StoreInst *StoreDict = IRB.CreateStore(AFLDictPtr, AFLDictionary);
-        ModuleSanitizerCoverage::SetNoSanitizeMetadata(StoreDict);
-
-      }
-
-    }
-
-  }
 
   /* Say something nice. */
 
@@ -1650,20 +1057,6 @@ void ModuleSanitizerCoverage::InjectCoverageAtBlock(Function &F, BasicBlock &BB,
 
   if (Options.TracePCGuard) {
 
-  for (auto &I : BB) {
-    std::string filename;
-    unsigned line;
-    getDebugLoc(&I, filename, line);
-
-    if (filename.empty() || line == 0)
-      continue;
-    std::size_t found = filename.find_last_of("/\\");
-    if (found != std::string::npos)
-      filename = filename.substr(found + 1);
-
-    bb_name = filename + ":" + std::to_string(line);
-    break;
-  }
     // afl++ START
     ++afl_global_id;
 
@@ -1684,17 +1077,11 @@ void ModuleSanitizerCoverage::InjectCoverageAtBlock(Function &F, BasicBlock &BB,
 
     Value *MapPtrIdx;
 
-    if (map_addr) {
 
-      MapPtrIdx = IRB.CreateGEP(Int8Ty, MapPtrFixed, CurLoc);
+    LoadInst *MapPtr = IRB.CreateLoad(PointerType::get(Int8Ty, 0), AFLMapPtr);
+    ModuleSanitizerCoverage::SetNoSanitizeMetadata(MapPtr);
+    MapPtrIdx = IRB.CreateGEP(Int8Ty, MapPtr, CurLoc);
 
-    } else {
-
-      LoadInst *MapPtr = IRB.CreateLoad(PointerType::get(Int8Ty, 0), AFLMapPtr);
-      ModuleSanitizerCoverage::SetNoSanitizeMetadata(MapPtr);
-      MapPtrIdx = IRB.CreateGEP(Int8Ty, MapPtr, CurLoc);
-
-    }
 
     /* Update bitmap */
     if (use_threadsafe_counters) {                                /* Atomic */
