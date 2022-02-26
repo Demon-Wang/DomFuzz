@@ -324,6 +324,9 @@ afl-llvm-dict2file.so:	llvm_mode/afl-llvm-dict2file.so.cc llvm_mode/afl-llvm-com
 	@printf "[*] Building 64-bit variant of the runtime (-m64)... "
 	@$(CC) $(CLANG_CFL) $(CFLAGS_SAFE) $(CPPFLAGS) -O3 -Wno-unused-result -m64 -fPIC -c $< -o $@ 2>/dev/null; if [ "$$?" = "0" ]; then echo "success!"; ln -sf afl-compiler-rt-64.o afl-llvm-rt-64.o; else echo "failed (that's fine)"; fi
 
+all_done: test_build
+	@echo "[+] All done! You can now use '../afl-clang-fast' to compile programs."
+
 .PHONY: clean
 clean:
 	rm -f *.o *.so *~ a.out core core.[1-9][0-9]* .test2 test-instr .test-instr0 .test-instr1 *.dwo
