@@ -213,14 +213,14 @@ u8 *name;
     cc_params[0] = alt_cc ? alt_cc : (u8*)"clang";
   }
 
+    if (getenv("AFL_DIRECT")) {
 
-
-
-
-
-
-    cc_params[cc_par_cnt++] = "-Wno-unused-command-line-argument";
-
+      cc_params[cc_par_cnt++] = "-Xclang";
+      cc_params[cc_par_cnt++] = "-load";
+      cc_params[cc_par_cnt++] = "-Xclang";
+      cc_params[cc_par_cnt++] =
+          alloc_printf("%s/afl-llvm-direct.so", obj_path);
+    }
 
     if (getenv("AFL_LLVM_DICT2FILE")) {
 
