@@ -255,6 +255,7 @@
     if (_res != _len) RPFATAL(_res, "Short read from %s", fn); \
   } while (0)
 
+/* Show a prefixed debug output. */
 #define DEBUGF(x...)                                    \
   do {                                                  \
                                                         \
@@ -264,6 +265,4 @@
   } while (0)
 
 #endif /* ! _HAVE_DEBUG_H */
-
-/* Show a prefixed debug output. */
 

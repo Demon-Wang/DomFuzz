@@ -17,11 +17,11 @@
 
 #define AFL_MAIN
 
-#include "common.h"
-#include "config.h"
-#include "types.h"
-#include "debug.h"
-#include "alloc-inl.h"
+// #include "common.h"
+#include "../config.h"
+#include "../types.h"
+#include "../debug.h"
+#include "../alloc-inl.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -30,6 +30,8 @@
 #include <strings.h>
 #include <limits.h>
 #include <assert.h>
+
+u8  be_quiet;
 
 #if (LLVM_MAJOR - 0 == 0)
   #undef LLVM_MAJOR

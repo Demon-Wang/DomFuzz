@@ -273,11 +273,8 @@ TARGETS = $(PROGS) all_done
 all: $(TARGETS)
 
 
-llvm_mode/afl-common.o: ./afl-common.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@ $(LDFLAGS)
-
-./afl-cc: llvm_mode/afl-clang-lto.c llvm_mode/afl-common.o
-	$(CC) $(CLANG_CFL) $(CFLAGS) $(CPPFLAGS) $< llvm_mode/afl-common.o -o $@ -DLLVM_MINOR=$(LLVM_MINOR) -DLLVM_MAJOR=$(LLVM_MAJOR) $(LDFLAGS) -DCFLAGS_OPT=\"$(CFLAGS_OPT)\" -lm
+./afl-cc: llvm_mode/afl-clang-lto.c
+	$(CC) $(CLANG_CFL) $(CFLAGS) $(CPPFLAGS) $< -o $@ -DLLVM_MINOR=$(LLVM_MINOR) -DLLVM_MAJOR=$(LLVM_MAJOR) $(LDFLAGS) -DCFLAGS_OPT=\"$(CFLAGS_OPT)\" -lm
 ifneq "$(AFL_CLANG_FLTO)" ""
 ifeq "$(LLVM_LTO)" "1"
 	@ln -sf afl-cc ./afl-clang-lto

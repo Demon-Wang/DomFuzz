@@ -25,10 +25,10 @@
 #define AFL_MAIN
 #define _GNU_SOURCE
 
-#include "config.h"
-#include "types.h"
-#include "debug.h"
-#include "alloc-inl.h"
+#include "../config.h"
+#include "../types.h"
+#include "../debug.h"
+#include "../alloc-inl.h"
 
 #include <stdio.h>
 #include <unistd.h>

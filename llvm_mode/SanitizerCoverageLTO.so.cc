@@ -52,8 +52,8 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
-#include "config.h"
-#include "debug.h"
+#include "../config.h"
+#include "../debug.h"
 #include "afl-llvm-common.h"
 
 using namespace llvm;
