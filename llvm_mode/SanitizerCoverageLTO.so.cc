@@ -248,9 +248,7 @@ class ModuleSanitizerCoverage {
   LLVMContext *                    Ct = NULL;
   Module *                         Mo = NULL;
   GlobalVariable *                 AFLMapPtr = NULL;
-  Value *                          MapPtrFixed = NULL;
   std::ofstream                    dFile;
-  size_t                           found = 0;
   // afl++ END
 
 };
@@ -449,11 +447,6 @@ bool ModuleSanitizerCoverage::instrumentModule(
 
   }
 
-  // we make this the default as the fixed map has problems with
-  // defered forkserver, early constructors, ifuncs and maybe more
-  /*if (getenv("AFL_LLVM_MAP_DYNAMIC"))*/
-
-
   /* Get/set the globals for the SHM region. */
 
 
@@ -468,6 +461,7 @@ bool ModuleSanitizerCoverage::instrumentModule(
   initInstrumentList();
   scanForDangerousFunctions(&M);
   Mo = &M;
+
 
   // afl++ END
 
@@ -541,6 +535,7 @@ bool ModuleSanitizerCoverage::instrumentModule(
 
     }
 
+  }
 
   /* Say something nice. */
 
@@ -1078,9 +1073,9 @@ void ModuleSanitizerCoverage::InjectCoverageAtBlock(Function &F, BasicBlock &BB,
     Value *MapPtrIdx;
 
 
-    LoadInst *MapPtr = IRB.CreateLoad(PointerType::get(Int8Ty, 0), AFLMapPtr);
-    ModuleSanitizerCoverage::SetNoSanitizeMetadata(MapPtr);
-    MapPtrIdx = IRB.CreateGEP(Int8Ty, MapPtr, CurLoc);
+      LoadInst *MapPtr = IRB.CreateLoad(PointerType::get(Int8Ty, 0), AFLMapPtr);
+      ModuleSanitizerCoverage::SetNoSanitizeMetadata(MapPtr);
+      MapPtrIdx = IRB.CreateGEP(Int8Ty, MapPtr, CurLoc);
 
 
     /* Update bitmap */

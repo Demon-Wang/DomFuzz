@@ -199,7 +199,7 @@ static void edit_params(u32 argc, char **argv, char **envp) {
           "identify the correct -flto flag");
 
   }
-
+u8 *name;
   name = strrchr(argv[0], '/');
   if (!name) name = argv[0]; else name++;
 
@@ -667,8 +667,8 @@ static void edit_params(u32 argc, char **argv, char **envp) {
 
 int main(int argc, char **argv, char **envp) {
 
-  int   i, passthrough = 0;
-  char *callname = argv[0], *ptr = NULL;
+  int   i;
+  char  *ptr = NULL;
 
   if (getenv("AFL_DEBUG")) {
 
@@ -698,7 +698,7 @@ int main(int argc, char **argv, char **envp) {
 
     SAYF(cCYA
          "afl-cc" VERSION cRST
-         " by Michal Zalewski, Laszlo Szekeres, Marc Heuse - mode: LLVM-LTO\n",
+         " by Michal Zalewski, Laszlo Szekeres, Marc Heuse - mode: LLVM-LTO\n"
          );
 
   }

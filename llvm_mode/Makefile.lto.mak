@@ -273,7 +273,7 @@ TARGETS = $(PROGS) all_done
 all: $(TARGETS)
 
 
-llvm_mode/afl-common.o: ./llvm_mode/afl-common.c
+llvm_mode/afl-common.o: ./afl-common.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@ $(LDFLAGS)
 
 ./afl-cc: llvm_mode/afl-clang-lto.c llvm_mode/afl-common.o
@@ -303,15 +303,15 @@ ifeq "$(LLVM_LTO)" "1"
 endif
 
 # laf
-./split-switches-pass.so:	llvm_mode/split-switches-pass.so.cc llvm_mode/afl-llvm-common.o | test_deps
+./split-switches-pass.so:	llvm_mode/split-switches-pass.so.cc llvm_mode/afl-llvm-common.o
 	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) llvm_mode/afl-llvm-common.o
-./compare-transform-pass.so:	llvm_mode/compare-transform-pass.so.cc llvm_mode/afl-llvm-common.o | test_deps
+./compare-transform-pass.so:	llvm_mode/compare-transform-pass.so.cc llvm_mode/afl-llvm-common.o
 	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) llvm_mode/afl-llvm-common.o
-./split-compares-pass.so:	llvm_mode/split-compares-pass.so.cc llvm_mode/afl-llvm-common.o | test_deps
+./split-compares-pass.so:	llvm_mode/split-compares-pass.so.cc llvm_mode/afl-llvm-common.o
 	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) llvm_mode/afl-llvm-common.o
 # /laf
 
-afl-llvm-dict2file.so:	llvm_mode/afl-llvm-dict2file.so.cc llvm_mode/afl-llvm-common.o | test_deps
+afl-llvm-dict2file.so:	llvm_mode/afl-llvm-dict2file.so.cc llvm_mode/afl-llvm-common.o
 	$(CXX) $(CLANG_CPPFL) -shared $< -o $@ $(CLANG_LFL) llvm_mode/afl-llvm-common.o
 
 ./afl-compiler-rt.o: llvm_mode/afl-compiler-rt.o.c
@@ -325,7 +325,7 @@ afl-llvm-dict2file.so:	llvm_mode/afl-llvm-dict2file.so.cc llvm_mode/afl-llvm-com
 	@printf "[*] Building 64-bit variant of the runtime (-m64)... "
 	@$(CC) $(CLANG_CFL) $(CFLAGS_SAFE) $(CPPFLAGS) -O3 -Wno-unused-result -m64 -fPIC -c $< -o $@ 2>/dev/null; if [ "$$?" = "0" ]; then echo "success!"; ln -sf afl-compiler-rt-64.o afl-llvm-rt-64.o; else echo "failed (that's fine)"; fi
 
-all_done: test_build
+all_done:
 	@echo "[+] All done! You can now use '../afl-clang-fast' to compile programs."
 
 .PHONY: clean

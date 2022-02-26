@@ -82,7 +82,7 @@ static void __afl_map_shm(void) {
                     __afl_final_loc, MAP_SIZE);
     }
   }
-  eles{
+  else{
                     if (!getenv("AFL_QUIET"))
             fprintf(stderr,
                     "Whoops ! there no instructions!");
