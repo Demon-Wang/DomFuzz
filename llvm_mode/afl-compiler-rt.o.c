@@ -49,7 +49,7 @@
 #ifdef USE_TRACE_PC
 #  define CONST_PRIO 5
 #else
-#  define CONST_PRIO 0
+#  define CONST_PRIO 1
 #endif /* ^USE_TRACE_PC */
 
 
