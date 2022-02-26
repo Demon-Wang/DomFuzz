@@ -25,7 +25,7 @@ MAN_PATH    ?= $(PREFIX)/share/man/man8
 
 BUILD_DATE  ?= $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" "+%Y-%m-%d" 2>/dev/null || date -u -r "$(SOURCE_DATE_EPOCH)" "+%Y-%m-%d" 2>/dev/null || date -u "+%Y-%m-%d")
 
-VERSION     = $(shell grep '^\#define VERSION ' ../config.h | cut -d '"' -f2)
+VERSION     = $(shell grep '^\#define VERSION ' ./config.h | cut -d '"' -f2)
 
 LLVM_CONFIG ?= llvm-config
 
