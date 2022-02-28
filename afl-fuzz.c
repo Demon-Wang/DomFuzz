@@ -859,6 +859,7 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   q->dom_count = cur_dom_count;
   if (q->dom_count){
     last_dom_time = get_cur_time();
+    find_dom = 1;
   }
 #endif
   if (cur_distance > 0) {
@@ -1069,7 +1070,6 @@ static inline u8 has_new_bits(u8* virgin_map) {
         else ret = 1;
 
 #else
-
         if ((cur[0] && vir[0] == 0xff) || (cur[1] && vir[1] == 0xff) ||
             (cur[2] && vir[2] == 0xff) || (cur[3] && vir[3] == 0xff)) ret = 2;
         else ret = 1;
@@ -2786,6 +2786,7 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
 
       q->dom_count = cur_dom_count;
       if (q->dom_count){
+        find_dom = 1;
         last_dom_time = get_cur_time();
       }
       if (cur_dom_count > 0) {
@@ -3463,9 +3464,11 @@ keep_as_crash:
       total_crashes++;
 
     #ifdef DIRECT_COUNT
+    has_new_bits(virgin_bits);
     if(cur_direct_count)
         total_direct_crashs++;
     #endif
+
       if (unique_crashes >= KEEP_UNIQUE_CRASH) return keeping;
 
       if (!dumb_mode) {
@@ -3496,6 +3499,7 @@ keep_as_crash:
 
       unique_crashes++;
     #ifdef DIRECT_COUNT
+    has_new_bits(virgin_bits);
     if(cur_direct_count)
       if(has_new_bits(virgin_direct_crash) == 2) 
         unique_direct_crashs++;
