@@ -74,6 +74,11 @@ cl::opt<std::string> TargetsFile(
     cl::desc("Input file containing the target lines of code."),
     cl::value_desc("targets"));
 
+cl::opt<std::string> DominatorFile(
+    "doms",
+    cl::desc("Input file containing the dominator BBs."),
+    cl::value_desc("doms"));
+
 cl::opt<std::string> OutDirectory(
     "outdir",
     cl::desc("Output directory where Ftargets.txt, Fnames.txt, and BBnames.txt are generated."),
@@ -188,7 +193,7 @@ bool AFLCoverage::runOnModule(Module &M) {
   std::list<std::string> targets;
   std::map<std::string, int> bb_to_dis;
   std::vector<std::string> basic_blocks;
-
+  std::vector<std::string> doms;
   if (!TargetsFile.empty()) {
 
     if (OutDirectory.empty()) {
@@ -405,7 +410,12 @@ bool AFLCoverage::runOnModule(Module &M) {
 
   } else {
     /* Distance instrumentation */
-
+    if (!DominatorFile.empty()) {
+      std::ifstream domsfile(DominatorFile);
+      std::string line;
+      while (std::getline(domsfile, line))
+        doms.push_back(line);
+      domsfile.close();
     LLVMContext &C = M.getContext();
     IntegerType *Int8Ty  = IntegerType::getInt8Ty(C);
     IntegerType *Int32Ty = IntegerType::getInt32Ty(C);
@@ -414,9 +424,13 @@ bool AFLCoverage::runOnModule(Module &M) {
 #ifdef __x86_64__
     IntegerType *LargestType = Int64Ty;
     ConstantInt *MapCntLoc = ConstantInt::get(LargestType, MAP_SIZE + 8);
+    ConstantInt *MapDomCountLoc = ConstantInt::get(LargestType, MAP_SIZE + 16);
+    ConstantInt *MapDestCountLoc = ConstantInt::get(LargestType, MAP_SIZE + 24);
 #else
     IntegerType *LargestType = Int32Ty;
     ConstantInt *MapCntLoc = ConstantInt::get(LargestType, MAP_SIZE + 4);
+    ConstantInt *MapDomCountLoc = ConstantInt::get(LargestType, MAP_SIZE + 8);
+    ConstantInt *MapDestCountLoc = ConstantInt::get(LargestType, MAP_SIZE + 12);
 #endif
     ConstantInt *MapDistLoc = ConstantInt::get(LargestType, MAP_SIZE);
     ConstantInt *One = ConstantInt::get(LargestType, 1);
@@ -432,11 +446,13 @@ bool AFLCoverage::runOnModule(Module &M) {
     for (auto &F : M) {
 
       int distance = -1;
-
+      bool is_target = 0;
+      bool is_doom =0
       for (auto &BB : F) {
 
         distance = -1;
-
+        is_target = 0;
+        is_dom =0
         if (is_aflgo) {
 
           std::string bb_name;
@@ -451,12 +467,30 @@ bool AFLCoverage::runOnModule(Module &M) {
             if (found != std::string::npos)
               filename = filename.substr(found + 1);
 
+            for (auto &target : targets) {
+                std::size_t found = target.find_last_of("/\\");
+                if (found != std::string::npos)
+                  target = target.substr(found + 1);
+
+                std::size_t pos = target.find_last_of(":");
+                std::string target_file = target.substr(0, pos);
+                unsigned int target_line = atoi(target.substr(pos + 1).c_str());
+
+                if (!target_file.compare(filename) && target_line == line)
+                    is_target = 1
+            }
+
             bb_name = filename + ":" + std::to_string(line);
             break;
           }
 
           if (!bb_name.empty()) {
             printf("bb name: %s \n",bb_name);
+
+            if (find(doms.begin(), doms.end(), bb_name) != doms.end()) {
+              is_dom = 1 ;
+            }
+
             if (find(basic_blocks.begin(), basic_blocks.end(), bb_name) == basic_blocks.end()) {
 
               if (is_selective)
@@ -479,17 +513,37 @@ bool AFLCoverage::runOnModule(Module &M) {
 
         BasicBlock::iterator IP = BB.getFirstInsertionPt();
         IRBuilder<> IRB(&(*IP));
+        /* Load SHM pointer */
+
+        LoadInst *MapPtr = IRB.CreateLoad(AFLMapPtr);
+        MapPtr->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+
+        if (is_target){
+          
+          Value *MapDestCountPtr = IRB.CreateBitCast(
+          IRB.CreateGEP(MapPtr, MapDestCountLoc), Int32ty->getPointerTo());
+          LoadInst *MapDestCount = IRB.CreateLoad(MapDestCountPtr);
+          MapDestCount->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+          Value *IncrDestCount = IRB.CreateAdd(MapDestCount, One);
+          IRB.CreateStore(IncrDestCount, MapDestCount)
+            ->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+        }
+        if (is_dom){
+          Value *MapDomCountPtr = IRB.CreateBitCast(
+          IRB.CreateGEP(MapPtr, MapDomCountPtr), Int32ty->getPointerTo());
+          LoadInst *MapDomCount = IRB.CreateLoad(MapDomCountPtr);
+          MapDomCount->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+          Value *IncrDomCount = IRB.CreateAdd(MapDomCount, One);
+          IRB.CreateStore(IncrDestCount, MapDomCount)
+            ->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+        }
 
         if (distance >= 0) {
 
           ConstantInt *Distance =
               ConstantInt::get(LargestType, (unsigned) distance);
 
-          /* Load SHM pointer */
 
-          LoadInst *MapPtr = IRB.CreateLoad(AFLMapPtr);
-          MapPtr->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
-          
           /* Add distance to shm[MAPSIZE] */
 
           Value *MapDistPtr = IRB.CreateBitCast(
