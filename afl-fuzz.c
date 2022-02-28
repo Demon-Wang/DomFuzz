@@ -288,6 +288,8 @@ struct queue_entry {
 
 #ifdef DOM_COUNT
   u32 dom_count;
+  bool find_dom;
+  EXP_ST u64 last_dom_time;
 #endif
 
   struct queue_entry *next,           /* Next element, if any             */
@@ -853,6 +855,9 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   q->distance = cur_distance;
 #ifdef DOM_COUNT
   q->dom_count = cur_dom_count;
+  if (q->dom_count){
+    last_dom_time = get_cur_time();
+  }
 #endif
   if (cur_distance > 0) {
 
@@ -2776,6 +2781,9 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
       has_new_bits(virgin_bits);
 
       q->dom_count = cur_dom_count;
+      if (q->dom_count){
+        last_dom_time = get_cur_time();
+      }
       if (cur_dom_count > 0) {
 
         if (max_dom_count <= 0) {
@@ -5015,9 +5023,17 @@ static u32 calculate_score(struct queue_entry* q) {
       normalized_d = (q->distance - min_distance) / (max_distance - min_distance);
 
     if (normalized_d >= 0) {
-
-        double p = (1.0 - normalized_d) * (1.0 - T) + 0.5 * T;
-        power_factor = pow(2.0, 2.0 * (double) log2(MAX_FACTOR) * (p - 0.5));
+      #ifdef DOM_COUNT
+      if(max_dom_count){
+        double normalized_dom = 1.0;
+        if (max_dom_count != min_dom_count)
+          normalized_dom = (q->dom_count - min_dom_count) / (max_dom_count - min_dom_count);
+        double p = (normalized_dom*(max_dom_count/(max_dom_count+1))+(1.0 - normalized_d)/(max_dom_count+1)) * (1.0 - T) + 0.5 * T;
+      }
+      else
+      #endif
+      double p = (1.0 - normalized_d) * (1.0 - T) + 0.5 * T;
+      power_factor = pow(2.0, 2.0 * (double) log2(MAX_FACTOR) * (p - 0.5));
 
     }// else WARNF ("Normalized distance negative: %f", normalized_d);
 
@@ -8419,6 +8435,18 @@ int main(int argc, char** argv) {
 
     skipped_fuzz = fuzz_one(use_argv);
 
+    if (find_dom)
+    {
+      t_x = t_x/2;
+      find_dom = 0;
+    }
+    else
+    {
+      if (last_dom_time)
+        tx = (get_cur_time() - last_dom_time)/ (1000*60);
+      tx = get_cur_time() - start_time;
+    }
+    
     if (!stop_soon && sync_id && !skipped_fuzz) {
       
       if (!(sync_interval_cnt++ % SYNC_INTERVAL))
