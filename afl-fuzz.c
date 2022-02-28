@@ -168,6 +168,8 @@ EXP_ST u8  virgin_bits[MAP_SIZE],     /* Regions yet untouched by fuzzing */
 EXP_ST u8  virgin_direct_path[MAP_SIZE];    /* Bits we haven't seen in discover direct path   */
 EXP_ST u8  virgin_direct_crash[MAP_SIZE];    /* Bits we haven't seen in discover direct path   */
 static u32 cur_direct_count;
+EXP_ST u64 first_direct_path_time;
+EXP_ST u64 first_direct_crash_time;
 #endif
 
 static u8  var_bytes[MAP_SIZE];       /* Bytes that appear to be variable */
@@ -1032,6 +1034,8 @@ static inline u8 has_new_bits(u8* virgin_map) {
     #endif
     if (*total_direct_count > 0)
       cur_direct_count = total_direct_count;
+      if (!first_direct_path_time)
+        first_direct_path_time = get_cur_time();
     else
       cur_direct_count = 0;
   #endif
@@ -3378,8 +3382,8 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     keeping = 1;
     #ifdef DIRECT_COUNT
     if(cur_direct_count)
-    if (has_new_bits(virgin_direct_path) == 2) 
-      unique_direct_paths++;
+      if (has_new_bits(virgin_direct_path) == 2)
+        unique_direct_paths++;
     #endif
   }
 
@@ -3495,6 +3499,8 @@ keep_as_crash:
     if(cur_direct_count)
       if(has_new_bits(virgin_direct_crash) == 2) 
         unique_direct_crashs++;
+        if(!first_direct_crash_time)
+          first_direct_crash_time = get_cur_time();
     #endif
       last_crash_time = get_cur_time();
       last_crash_execs = total_execs;
