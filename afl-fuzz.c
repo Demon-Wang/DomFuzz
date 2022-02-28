@@ -164,6 +164,12 @@ EXP_ST u8  virgin_bits[MAP_SIZE],     /* Regions yet untouched by fuzzing */
            virgin_tmout[MAP_SIZE],    /* Bits we haven't seen in tmouts   */
            virgin_crash[MAP_SIZE];    /* Bits we haven't seen in crashes  */
 
+#ifdef DIRECT_COUNT
+EXP_ST u8  virgin_direct_path[MAP_SIZE];    /* Bits we haven't seen in discover direct path   */
+EXP_ST u8  virgin_direct_crash[MAP_SIZE];    /* Bits we haven't seen in discover direct path   */
+static u32 cur_direct_count;
+#endif
+
 static u8  var_bytes[MAP_SIZE];       /* Bytes that appear to be variable */
 
 static s32 shm_id;                    /* ID of the SHM region             */
@@ -208,6 +214,12 @@ EXP_ST u64 total_crashes,             /* Total number of crashes          */
            bytes_trim_out,            /* Bytes coming outa the trimmer    */
            blocks_eff_total,          /* Blocks subject to effector maps  */
            blocks_eff_select;         /* Blocks selected as fuzzable      */
+
+#ifdef DIRECT_COUNT
+EXP_ST u64 unique_direct_paths;
+EXP_ST u64 unique_direct_crashs;
+EXP_ST u64 total_direct_crashs;
+#endif
 
 static u32 subseq_tmouts;             /* Number of timeouts in a row      */
 
@@ -274,6 +286,10 @@ struct queue_entry {
 
   double distance;                    /* Distance to targets              */
 
+#ifdef DOM_COUNT
+  u32 dom_count;
+#endif
+
   struct queue_entry *next,           /* Next element, if any             */
                      *next_100;       /* 100 elements ahead               */
 
@@ -302,6 +318,13 @@ static u32 a_extras_cnt;              /* Total number of tokens available */
 static double cur_distance = -1.0;     /* Distance of executed input       */
 static double max_distance = -1.0;     /* Maximal distance for any input   */
 static double min_distance = -1.0;     /* Minimal distance for any input   */
+
+#ifdef DOM_COUNT
+static u32 cur_dom_count;
+static u32 max_dom_count;
+static u32 min_dom_count;
+#endif
+
 static u32 t_x = 10;                  /* Time to exploitation (Default: 10 min) */
 
 static u8* (*post_handler)(u8* buf, u32* len);
@@ -828,6 +851,9 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   q->passed_det   = passed_det;
 
   q->distance = cur_distance;
+#ifdef DOM_COUNT
+  q->dom_count = cur_dom_count;
+#endif
   if (cur_distance > 0) {
 
     if (max_distance <= 0) {
@@ -838,6 +864,20 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
     if (cur_distance < min_distance) min_distance = cur_distance;
 
   }
+
+#ifdef DOM_COUNT
+  if (cur_dom_count > 0 ) {
+
+    if (max_dom_count <= 0) {
+      max_dom_count = cur_dom_count;
+      min_dom_count = cur_dom_count;
+    }
+    if (cur_dom_count > max_dom_count) max_dom_count = cur_dom_count;
+    if (cur_dom_count < min_dom_count) min_dom_count = cur_dom_count;
+
+  }
+#endif
+
 
   if (q->depth > max_depth) max_depth = q->depth;
 
@@ -968,6 +1008,30 @@ static inline u8 has_new_bits(u8* virgin_map) {
     cur_distance = -1.0;
 
 #endif /* ^WORD_SIZE_64 */
+
+#ifdef DOM_COUNT
+  #ifdef WORD_SIZE_64
+  u32* total_dom_count = (u32*)(trace_bits + MAP_SIZE + 16);
+  #else
+  u32* total_dom_count = (u32*)(trace_bits + MAP_SIZE + 8);
+  #endif
+  if (*total_dom_count > 0)
+    cur_dom_count = total_dom_count;
+  else
+    cur_dom_count = 0;
+  #ifdef DIRECT_COUNT
+    #ifdef WORD_SIZE_64
+    u32* total_direct_count = (u32*)(trace_bits + MAP_SIZE + 20);
+    #else
+    u32* total_direct_count = (u32*)(trace_bits + MAP_SIZE + 12);
+    #endif
+    if (*total_direct_count > 0)
+      cur_direct_count = total_direct_count;
+    else
+      cur_direct_count = 0;
+  #endif
+#endif
+
 
   u8   ret = 0;
 
@@ -1423,7 +1487,10 @@ EXP_ST void setup_shm(void) {
 
   memset(virgin_tmout, 255, MAP_SIZE);
   memset(virgin_crash, 255, MAP_SIZE);
-
+  #ifdef DIRECT_COUNT
+  memset(virgin_direct_path, 255, MAP_SIZE);
+  memset(virgin_direct_crash, 255, MAP_SIZE);
+  #endif
   /* Allocate 16 bytes more for distance info and 8 bytes for dominator count */
   shm_id = shmget(IPC_PRIVATE, MAP_SIZE + 24, IPC_CREAT | IPC_EXCL | 0600);
 
@@ -2683,7 +2750,7 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
 
     /* This is relevant when test cases are added w/out save_if_interesting */
 
-    if (q->distance <= 0) {
+    if (!queue_cur) {
 
       /* This calculates cur_distance */
       has_new_bits(virgin_bits);
@@ -2701,6 +2768,27 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
       }
 
     }
+
+    #ifdef DOM_COUNT
+    if (!queue_cur) {
+
+      /* This calculates cur_distance */
+      has_new_bits(virgin_bits);
+
+      q->dom_count = cur_dom_count;
+      if (cur_dom_count > 0) {
+
+        if (max_dom_count <= 0) {
+          max_dom_count = cur_dom_count;
+          min_dom_count = cur_dom_count;
+        }
+        if (cur_dom_count > max_dom_count) max_dom_count = cur_dom_count;
+        if (cur_dom_count < min_dom_count) min_dom_count = cur_dom_count;
+
+      }
+
+    }
+    #endif
 
     if (q->exec_cksum != cksum) {
 
@@ -3280,7 +3368,11 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     close(fd);
 
     keeping = 1;
-
+    #ifdef DIRECT_COUNT
+    if(cur_direct_count)
+    if (has_new_bits(virgin_direct_path) == 2) 
+      unique_direct_paths++;
+    #endif
   }
 
   switch (fault) {
@@ -3358,6 +3450,10 @@ keep_as_crash:
 
       total_crashes++;
 
+    #ifdef DIRECT_COUNT
+    if(cur_direct_count)
+        total_direct_crashs++;
+    #endif
       if (unique_crashes >= KEEP_UNIQUE_CRASH) return keeping;
 
       if (!dumb_mode) {
@@ -3387,7 +3483,11 @@ keep_as_crash:
 #endif /* ^!SIMPLE_FILES */
 
       unique_crashes++;
-
+    #ifdef DIRECT_COUNT
+    if(cur_direct_count)
+      if(has_new_bits(virgin_direct_crash) == 2) 
+        unique_direct_crashs++;
+    #endif
       last_crash_time = get_cur_time();
       last_crash_execs = total_execs;
 
