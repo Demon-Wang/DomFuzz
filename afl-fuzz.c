@@ -8441,6 +8441,7 @@ int main(int argc, char** argv) {
 
     skipped_fuzz = fuzz_one(use_argv);
 
+#ifdef DOM_COUNT
     if (find_dom)
     {
       t_x = t_x/2;
@@ -8449,10 +8450,10 @@ int main(int argc, char** argv) {
     else
     {
       if (last_dom_time)
-        tx = (get_cur_time() - last_dom_time)/ (1000*60);
-      tx = get_cur_time() - start_time;
+        t_x = (get_cur_time() - last_dom_time)/ (1000*60);
+      t_x = get_cur_time() - start_time;
     }
-    
+#endif
     if (!stop_soon && sync_id && !skipped_fuzz) {
       
       if (!(sync_interval_cnt++ % SYNC_INTERVAL))
