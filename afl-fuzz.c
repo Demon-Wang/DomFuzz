@@ -4191,7 +4191,7 @@ static void show_stats(void) {
   if (cur_ms - last_plot_ms > PLOT_UPDATE_SEC * 1000) {
 
     last_plot_ms = cur_ms;
-    maybe_update_plot_file(t_byte_ratio, avg_exec);
+    maybe_update_plot_file(t_bytes, t_byte_ratio, avg_exec);
  
   }
 
