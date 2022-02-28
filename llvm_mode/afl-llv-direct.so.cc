@@ -428,9 +428,6 @@ bool AFLCoverage::runOnModule(Module &M) {
         new GlobalVariable(M, PointerType::get(Int8Ty, 0), false,
                            GlobalValue::ExternalLinkage, 0, "__afl_area_ptr");
 
-    GlobalVariable *AFLPrevLoc = new GlobalVariable(
-        M, Int32Ty, false, GlobalValue::ExternalLinkage, 0, "__afl_prev_loc",
-        0, GlobalVariable::GeneralDynamicTLSModel, 0, false);
 
     for (auto &F : M) {
 
@@ -488,6 +485,11 @@ bool AFLCoverage::runOnModule(Module &M) {
           ConstantInt *Distance =
               ConstantInt::get(LargestType, (unsigned) distance);
 
+          /* Load SHM pointer */
+
+          LoadInst *MapPtr = IRB.CreateLoad(AFLMapPtr);
+          MapPtr->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+          
           /* Add distance to shm[MAPSIZE] */
 
           Value *MapDistPtr = IRB.CreateBitCast(
