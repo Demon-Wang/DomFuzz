@@ -3700,7 +3700,7 @@ static void write_stats_file(double bitmap_cvg, double stability, double eps) {
 
 /* Update the plot file if there is a reason to. */
 
-static void maybe_update_plot_file(double bitmap_cvg, double eps) {
+static void maybe_update_plot_file(u32 t_bytes, double bitmap_cvg, double eps) {
 
   static u32 prev_qp, prev_pf, prev_pnf, prev_ce, prev_md;
   static u64 prev_qc, prev_uc, prev_uh;
@@ -3723,13 +3723,13 @@ static void maybe_update_plot_file(double bitmap_cvg, double eps) {
 
      unix_time, cycles_done, cur_path, paths_total, paths_not_fuzzed,
      favored_not_fuzzed, unique_crashes, unique_hangs, max_depth,
-     execs_per_sec */
+     execs_per_sec , totle execs , edges_found*/
 
   fprintf(plot_file, 
-          "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %llu, %u, %0.02f\n",
+          "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %llu, %u, %0.02f, %llu, %u\n",
           get_cur_time() / 1000, queue_cycle - 1, current_entry, queued_paths,
           pending_not_fuzzed, pending_favored, bitmap_cvg, unique_crashes,
-          unique_hangs, max_depth, eps); /* ignore errors */
+          unique_hangs, max_depth, eps , total_execs, t_bytes); /* ignore errors */
 
   fflush(plot_file);
 
