@@ -291,7 +291,6 @@ struct queue_entry {
 #ifdef DOM_COUNT
   u32 dom_count;
   bool find_dom;
-  EXP_ST u64 last_dom_time;
 #endif
 
   struct queue_entry *next,           /* Next element, if any             */
@@ -326,7 +325,6 @@ static double min_distance = -1.0;     /* Minimal distance for any input   */
 #ifdef DOM_COUNT
 static u32 cur_dom_count;
 static u32 max_dom_count;
-static u32 min_dom_count;
 #endif
 
 static u32 t_x = 10;                  /* Time to exploitation (Default: 10 min) */
@@ -858,7 +856,6 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
 #ifdef DOM_COUNT
   q->dom_count = cur_dom_count;
   if (q->dom_count){
-    last_dom_time = get_cur_time();
     find_dom = 1;
   }
 #endif
@@ -875,14 +872,7 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
 
 #ifdef DOM_COUNT
   if (cur_dom_count > 0 ) {
-
-    if (max_dom_count <= 0) {
-      max_dom_count = cur_dom_count;
-      min_dom_count = cur_dom_count;
-    }
     if (cur_dom_count > max_dom_count) max_dom_count = cur_dom_count;
-    if (cur_dom_count < min_dom_count) min_dom_count = cur_dom_count;
-
   }
 #endif
 
@@ -2787,17 +2777,9 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
       q->dom_count = cur_dom_count;
       if (q->dom_count){
         find_dom = 1;
-        last_dom_time = get_cur_time();
       }
       if (cur_dom_count > 0) {
-
-        if (max_dom_count <= 0) {
-          max_dom_count = cur_dom_count;
-          min_dom_count = cur_dom_count;
-        }
         if (cur_dom_count > max_dom_count) max_dom_count = cur_dom_count;
-        if (cur_dom_count < min_dom_count) min_dom_count = cur_dom_count;
-
       }
 
     }
@@ -5035,9 +5017,7 @@ static u32 calculate_score(struct queue_entry* q) {
     if (normalized_d >= 0) {
       #ifdef DOM_COUNT
       if(max_dom_count){
-        double normalized_dom = 1.0;
-        if (max_dom_count != min_dom_count)
-          normalized_dom = (q->dom_count - min_dom_count) / (max_dom_count - min_dom_count);
+        normalized_dom = q->dom_count / max_dom_count;
         double p = (normalized_dom*(max_dom_count/(max_dom_count+1))+(1.0 - normalized_d)/(max_dom_count+1)) * (1.0 - T) + 0.5 * T;
       }
       else
@@ -8051,6 +8031,8 @@ int main(int argc, char** argv) {
   u8  *extras_dir = 0;
   u8  mem_limit_given = 0;
   u8  exit_1 = !!getenv("AFL_BENCH_JUST_ONE");
+  u64 pre_cycle_start_time;
+  u64 pre_cycle_duration;
   char** use_argv;
 
   struct timeval tv;
@@ -8400,7 +8382,7 @@ int main(int argc, char** argv) {
     start_time += 4000;
     if (stop_soon) goto stop_fuzzing;
   }
-
+  bool first = true;
   while (1) {
 
     u8 skipped_fuzz;
@@ -8408,7 +8390,25 @@ int main(int argc, char** argv) {
     cull_queue();
 
     if (!queue_cur) {
-
+      if(first)
+      {
+        first = false;
+      }
+      else{
+        pre_cycle_duration = pre_cycle_start_time-get_cur_time();
+        #ifdef DOM_COUNT
+          if (find_dom)
+          {
+            t_x = (get_cur_time()-start_time)/(1000*60);
+            find_dom = 0;
+          }
+          else
+          {
+              t_x = pre_cycle_duration/ (2*1000*60);
+          }
+      #endif
+      }
+      pre_cycle_start_time = get_cur_time();
       queue_cycle++;
       current_entry     = 0;
       cur_skipped_paths = 0;
@@ -8445,19 +8445,7 @@ int main(int argc, char** argv) {
 
     skipped_fuzz = fuzz_one(use_argv);
 
-#ifdef DOM_COUNT
-    if (find_dom)
-    {
-      t_x = t_x/2;
-      find_dom = 0;
-    }
-    else
-    {
-      if (last_dom_time)
-        t_x = (get_cur_time() - last_dom_time)/ (1000*60);
-      t_x = get_cur_time() - start_time;
-    }
-#endif
+
     if (!stop_soon && sync_id && !skipped_fuzz) {
       
       if (!(sync_interval_cnt++ % SYNC_INTERVAL))
