@@ -2775,9 +2775,9 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
       has_new_bits(virgin_bits);
 
       q->dom_count = cur_dom_count;
-      if (q->dom_count){
-        find_dom = 1;
-      }
+      // if (q->dom_count){
+      //   find_dom = 1;
+      // }
       if (cur_dom_count > 0) {
         if (cur_dom_count > max_dom_count) max_dom_count = cur_dom_count;
       }
@@ -8395,7 +8395,7 @@ int main(int argc, char** argv) {
         first = false;
       }
       else{
-        pre_cycle_duration = pre_cycle_start_time-get_cur_time();
+        
         #ifdef DOM_COUNT
           if (find_dom)
           {
@@ -8404,7 +8404,8 @@ int main(int argc, char** argv) {
           }
           else
           {
-              t_x = pre_cycle_duration/ (2*1000*60);
+              pre_cycle_duration = get_cur_time() - pre_cycle_start_time;
+              t_x = get_cur_time() + pre_cycle_duration/ (2*1000*60);
           }
       #endif
       }
