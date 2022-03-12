@@ -291,6 +291,7 @@ struct queue_entry {
 #ifdef DOM_COUNT
   u32 dom_count;
   bool find_dom;
+  // EXP_ST u64 last_dom_time;
 #endif
 
   struct queue_entry *next,           /* Next element, if any             */
@@ -857,6 +858,7 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   q->dom_count = cur_dom_count;
   if (q->dom_count){
     find_dom = 1;
+    // last_dom_time = get_cur_time();
   }
 #endif
   if (cur_distance > 0) {
@@ -1060,6 +1062,7 @@ static inline u8 has_new_bits(u8* virgin_map) {
         else ret = 1;
 
 #else
+
         if ((cur[0] && vir[0] == 0xff) || (cur[1] && vir[1] == 0xff) ||
             (cur[2] && vir[2] == 0xff) || (cur[3] && vir[3] == 0xff)) ret = 2;
         else ret = 1;
@@ -3450,7 +3453,6 @@ keep_as_crash:
     if(cur_direct_count)
         total_direct_crashs++;
     #endif
-
       if (unique_crashes >= KEEP_UNIQUE_CRASH) return keeping;
 
       if (!dumb_mode) {
@@ -8031,8 +8033,10 @@ int main(int argc, char** argv) {
   u8  *extras_dir = 0;
   u8  mem_limit_given = 0;
   u8  exit_1 = !!getenv("AFL_BENCH_JUST_ONE");
+  #ifdef DOM_COUNT
   u64 pre_cycle_start_time;
   u64 pre_cycle_duration;
+  #endif
   char** use_argv;
 
   struct timeval tv;
@@ -8382,7 +8386,9 @@ int main(int argc, char** argv) {
     start_time += 4000;
     if (stop_soon) goto stop_fuzzing;
   }
+  #ifdef DOM_COUNT
   bool first = true;
+  #endif
   while (1) {
 
     u8 skipped_fuzz;
@@ -8390,13 +8396,14 @@ int main(int argc, char** argv) {
     cull_queue();
 
     if (!queue_cur) {
+      #ifdef DOM_COUNT
       if(first)
       {
         first = false;
       }
       else{
         
-        #ifdef DOM_COUNT
+        
           if (find_dom)
           {
             t_x = (get_cur_time()-start_time)/(1000*60);
@@ -8407,9 +8414,10 @@ int main(int argc, char** argv) {
               pre_cycle_duration = get_cur_time() - pre_cycle_start_time;
               t_x = get_cur_time() + pre_cycle_duration/ (2*1000*60);
           }
-      #endif
       }
       pre_cycle_start_time = get_cur_time();
+      #endif
+
       queue_cycle++;
       current_entry     = 0;
       cur_skipped_paths = 0;
