@@ -253,6 +253,42 @@ class ModuleSanitizerCoverage {
 
 };
 
+
+
+
+static void getDebugLoc(const Instruction *I, std::string &Filename,
+                        unsigned &Line) {
+#ifdef LLVM_OLD_DEBUG_API
+  DebugLoc Loc = I->getDebugLoc();
+  if (!Loc.isUnknown()) {
+    DILocation cDILoc(Loc.getAsMDNode(M.getContext()));
+    DILocation oDILoc = cDILoc.getOrigLocation();
+
+    Line = oDILoc.getLineNumber();
+    Filename = oDILoc.getFilename().str();
+
+    if (filename.empty()) {
+      Line = cDILoc.getLineNumber();
+      Filename = cDILoc.getFilename().str();
+    }
+  }
+#else
+  if (DILocation *Loc = I->getDebugLoc()) {
+    Line = Loc->getLine();
+    Filename = Loc->getFilename().str();
+
+    if (Filename.empty()) {
+      DILocation *oDILoc = Loc->getInlinedAt();
+      if (oDILoc) {
+        Line = oDILoc->getLine();
+        Filename = oDILoc->getFilename().str();
+      }
+    }
+  }
+#endif /* LLVM_OLD_DEBUG_API */
+}
+
+
 class ModuleSanitizerCoverageLegacyPass : public ModulePass {
 
  public:
@@ -390,6 +426,17 @@ bool ModuleSanitizerCoverage::instrumentModule(
   BlockList.clear();
   valueMap.clear();
   C = &(M.getContext());
+  for (auto &F : M) {
+    for (auto &BB : F) {
+        std::string bb_name;
+        for (auto &I : BB) {
+          std::string filename;
+          unsigned line;
+          getDebugLoc(&I, filename, line);
+          printf("%s,%u",filename.c_str(),line);
+        }
+    }
+  }
   DL = &M.getDataLayout();
   CurModule = &M;
   CurModuleUniqueId = getUniqueModuleId(CurModule);
