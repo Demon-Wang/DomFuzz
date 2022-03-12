@@ -215,12 +215,13 @@ u8 *name;
 
     if (getenv("AFL_DIRECT")) {
 
-      cc_params[cc_par_cnt++] = "-Xclang";
-      cc_params[cc_par_cnt++] = "-load";
-      cc_params[cc_par_cnt++] = "-Xclang";
-      cc_params[cc_par_cnt++] =
-          alloc_printf("%s/afl-llvm-direct.so", obj_path);
-      cc_params[cc_par_cnt++] = "-Qunused-arguments";
+      // cc_params[cc_par_cnt++] = "-Xclang";
+      // cc_params[cc_par_cnt++] = "-load";
+      // cc_params[cc_par_cnt++] = "-Xclang";
+      // cc_params[cc_par_cnt++] =
+      //     alloc_printf("%s/afl-llvm-direct.so", obj_path);
+      // cc_params[cc_par_cnt++] = "-Qunused-arguments";
+      cc_params[cc_par_cnt++] = alloc_printf("-Wl,-mllvm=-load=%s/afl-llvm-direct.so", obj_path);
       if(getenv("DOM_FILE"))
       {
         cc_params[cc_par_cnt++] = "-mllvm";
@@ -668,11 +669,11 @@ u8 *name;
 
     }
 
-  // #if !defined(__APPLE__) && !defined(__sun)
-  //   if (!shared_linking && !partial_linking)
-  //     cc_params[cc_par_cnt++] =
-  //         alloc_printf("-Wl,--dynamic-list=%s/dynamic_list.txt", obj_path);
-  // #endif
+  #if !defined(__APPLE__) && !defined(__sun)
+    if (!shared_linking && !partial_linking)
+      cc_params[cc_par_cnt++] =
+          alloc_printf("-Wl,--dynamic-list=%s/dynamic_list.txt", obj_path);
+  #endif
 
 
 #endif

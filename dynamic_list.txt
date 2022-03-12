@@ -1,0 +1,6 @@
+{
+  "__afl_area_ptr";
+  "__afl_final_loc";
+  "__afl_manual_init";
+  "__afl_persistent_loop";
+};
