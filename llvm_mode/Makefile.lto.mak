@@ -272,7 +272,7 @@ TARGETS = $(PROGS) all_done
 .PHONY: all
 all: $(TARGETS)
 
-./afl-llvm-direct.so: llvm_mode/afl-llvm-pass.so.cc
+./afl-llvm-direct.so: llvm_mode/afl-llvm-direct.so.cc
 	$(CXX) $(CLANG_CFL) -shared -fPIC $< -o $@ $(CLANG_LFL)
 
 ./afl-cc: llvm_mode/afl-clang-lto.c
