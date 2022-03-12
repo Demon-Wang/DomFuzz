@@ -220,6 +220,22 @@ u8 *name;
       cc_params[cc_par_cnt++] = "-Xclang";
       cc_params[cc_par_cnt++] =
           alloc_printf("%s/afl-llvm-direct.so", obj_path);
+      cc_params[cc_par_cnt++] = "-Qunused-arguments";
+      if(getenv("DOM_FILE"))
+      {
+        cc_params[cc_par_cnt++] = "-mllvm";
+        cc_params[cc_par_cnt++] = alloc_printf("-outdir=%s", getenv("DOM_FILE"));
+      }
+      if(getenv("DISTANCE_FILE"))
+      {
+      cc_params[cc_par_cnt++] = "-mllvm";
+        cc_params[cc_par_cnt++] = alloc_printf("-distance=%s", getenv("DISTANCE_FILE"));
+      }
+      if(getenv("TARGET_FILE"))
+      {
+      cc_params[cc_par_cnt++] = "-mllvm";
+        cc_params[cc_par_cnt++] = alloc_printf("-targets=%s", getenv("TARGET_FILE"));
+      }
     }
 
     if (getenv("AFL_LLVM_DICT2FILE")) {
