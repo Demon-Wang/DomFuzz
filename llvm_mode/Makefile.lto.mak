@@ -264,7 +264,7 @@ CLANG_CPPFL += -Wl,-znodelete
 
 
 PROGS_ALWAYS = ./afl-cc ./afl-compiler-rt.o ./afl-compiler-rt-32.o ./afl-compiler-rt-64.o 
-PROGS        = $(PROGS_ALWAYS)  ./split-compares-pass.so ./split-switches-pass.so ./afl-llvm-dict2file.so ./compare-transform-pass.so ./afl-ld-lto ./SanitizerCoverageLTO.so
+PROGS        = $(PROGS_ALWAYS)  ./split-compares-pass.so ./split-switches-pass.so ./afl-llvm-dict2file.so ./compare-transform-pass.so ./afl-ld-lto ./SanitizerCoverageLTO.so ./afl-llvm-direct.so
 
 
 TARGETS = $(PROGS) all_done
@@ -272,6 +272,8 @@ TARGETS = $(PROGS) all_done
 .PHONY: all
 all: $(TARGETS)
 
+./afl-llvm-direct.so: llvm_mode/afl-llvm-pass.so.cc
+	$(CXX) $(CLANG_CFL) -shared -fPIC $< -o $@ $(CLANG_LFL)
 
 ./afl-cc: llvm_mode/afl-clang-lto.c
 	$(CC) $(CLANG_CFL) $(CFLAGS) $(CPPFLAGS) $< -o $@ -DLLVM_MINOR=$(LLVM_MINOR) -DLLVM_MAJOR=$(LLVM_MAJOR) $(LDFLAGS) -DCFLAGS_OPT=\"$(CFLAGS_OPT)\" -lm
