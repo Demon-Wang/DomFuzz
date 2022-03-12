@@ -74,15 +74,11 @@ cl::opt<std::string> TargetsFile(
     cl::desc("Input file containing the target lines of code."),
     cl::value_desc("targets"));
 
-cl::opt<std::string> DominatorFile(
-    "doms",
-    cl::desc("Input file containing the dominator BBs."),
-    cl::value_desc("doms"));
 
 cl::opt<std::string> OutDirectory(
     "outdir",
-    cl::desc("Output directory where Ftargets.txt, Fnames.txt, and BBnames.txt are generated."),
-    cl::value_desc("outdir"));
+    cl::desc("bb doms file dir"),
+    cl::value_desc("doms file dir"));
 
 namespace llvm {
 
@@ -185,10 +181,29 @@ static bool isBlacklisted(const Function *F) {
 
 bool AFLCoverage::runOnModule(Module &M) {
 
-  if (!TargetsFile.empty() && !DistanceFile.empty()) {
-    FATAL("Cannot specify both '-targets' and '-distance'!");
-    return false;
-  }
+  bool is_aflgo = false;
+  bool is_aflgo_preprocessing = false;
+
+  if(DistanceFile.empty())
+  {
+    printf("no distance file!");
+    return 0;
+}
+
+
+  if(OutDirectory.empty())
+{    printf("no doms file!");
+    return 0;
+}
+
+  if(TargetsFile.empty())
+{    printf("no targets file!");
+    return 0;
+}
+  // if (!TargetsFile.empty() && !DistanceFile.empty()) {
+  //   FATAL("Cannot specify both '-targets' and '-distance'!");
+  //   return false;
+  // }
 
   std::list<std::string> targets;
   std::map<std::string, int> bb_to_dis;
@@ -196,10 +211,10 @@ bool AFLCoverage::runOnModule(Module &M) {
   std::vector<std::string> doms;
   if (!TargetsFile.empty()) {
 
-    if (OutDirectory.empty()) {
-      FATAL("Provide output directory '-outdir <directory>'");
-      return false;
-    }
+    // if (OutDirectory.empty()) {
+    //   FATAL("Provide output directory '-outdir <directory>'");
+    //   return false;
+    // }
 
     std::ifstream targetsfile(TargetsFile);
     std::string line;
@@ -207,9 +222,8 @@ bool AFLCoverage::runOnModule(Module &M) {
       targets.push_back(line);
     targetsfile.close();
 
-    is_aflgo_preprocessing = true;
-
-  } else if (!DistanceFile.empty()) {
+  } 
+  if (!DistanceFile.empty()) {
 
     std::ifstream cf(DistanceFile);
     if (cf.is_open()) {
@@ -286,136 +300,20 @@ bool AFLCoverage::runOnModule(Module &M) {
 
   int inst_blocks = 0;
 
-  if (is_aflgo_preprocessing) {
-
-    std::ofstream bbnames(OutDirectory + "/BBnames.txt", std::ofstream::out | std::ofstream::app);
-    std::ofstream bbcalls(OutDirectory + "/BBcalls.txt", std::ofstream::out | std::ofstream::app);
-    std::ofstream fnames(OutDirectory + "/Fnames.txt", std::ofstream::out | std::ofstream::app);
-    std::ofstream ftargets(OutDirectory + "/Ftargets.txt", std::ofstream::out | std::ofstream::app);
-
-    /* Create dot-files directory */
-    std::string dotfiles(OutDirectory + "/dot-files");
-    if (sys::fs::create_directory(dotfiles)) {
-      FATAL("Could not create directory %s.", dotfiles.c_str());
-    }
-
-    for (auto &F : M) {
-
-      bool has_BBs = false;
-      std::string funcName = F.getName().str();
-
-      /* Black list of function names */
-      if (isBlacklisted(&F)) {
-        continue;
-      }
-
-      bool is_target = false;
-      for (auto &BB : F) {
-
-        std::string bb_name("");
-        std::string filename;
-        unsigned line;
-
-        for (auto &I : BB) {
-          getDebugLoc(&I, filename, line);
-
-          /* Don't worry about external libs */
-          static const std::string Xlibs("/usr/");
-          if (filename.empty() || line == 0 || !filename.compare(0, Xlibs.size(), Xlibs))
-            continue;
-
-          if (bb_name.empty()) {
-
-            std::size_t found = filename.find_last_of("/\\");
-            if (found != std::string::npos)
-              filename = filename.substr(found + 1);
-
-            bb_name = filename + ":" + std::to_string(line);
-          }
-
-          if (!is_target) {
-              for (auto &target : targets) {
-                std::size_t found = target.find_last_of("/\\");
-                if (found != std::string::npos)
-                  target = target.substr(found + 1);
-
-                std::size_t pos = target.find_last_of(":");
-                std::string target_file = target.substr(0, pos);
-                unsigned int target_line = atoi(target.substr(pos + 1).c_str());
-
-                if (!target_file.compare(filename) && target_line == line)
-                  is_target = true;
-
-              }
-            }
-
-            if (auto *c = dyn_cast<CallInst>(&I)) {
-
-              std::size_t found = filename.find_last_of("/\\");
-              if (found != std::string::npos)
-                filename = filename.substr(found + 1);
-
-              if (auto *CalledF = c->getCalledFunction()) {
-                if (!isBlacklisted(CalledF))
-                  bbcalls << bb_name << "," << CalledF->getName().str() << "\n";
-              }
-            }
-        }
-
-        if (!bb_name.empty()) {
-
-          BB.setName(bb_name + ":");
-          if (!BB.hasName()) {
-            std::string newname = bb_name + ":";
-            Twine t(newname);
-            SmallString<256> NameData;
-            StringRef NameRef = t.toStringRef(NameData);
-            MallocAllocator Allocator;
-            BB.setValueName(ValueName::Create(NameRef, Allocator));
-          }
-
-          bbnames << BB.getName().str() << "\n";
-          has_BBs = true;
-
-#ifdef AFLGO_TRACING
-          auto *TI = BB.getTerminator();
-          IRBuilder<> Builder(TI);
-
-          Value *bbnameVal = Builder.CreateGlobalStringPtr(bb_name);
-          Type *Args[] = {
-              Type::getInt8PtrTy(M.getContext()) //uint8_t* bb_name
-          };
-          FunctionType *FTy = FunctionType::get(Type::getVoidTy(M.getContext()), Args, false);
-          Constant *instrumented = M.getOrInsertFunction("llvm_profiling_call", FTy);
-          Builder.CreateCall(instrumented, {bbnameVal});
-#endif
-
-        }
-      }
-
-      if (has_BBs) {
-        /* Print CFG */
-        std::string cfgFileName = dotfiles + "/cfg." + funcName + ".dot";
-        std::error_code EC;
-        raw_fd_ostream cfgFile(cfgFileName, EC, sys::fs::F_None);
-        if (!EC) {
-          WriteGraph(cfgFile, &F, true);
-        }
-
-        if (is_target)
-          ftargets << F.getName().str() << "\n";
-        fnames << F.getName().str() << "\n";
-      }
-    }
-
-  } else {
+  int des_count = 0;
+  int dom_count = 0;
+  if(is_aflgo){
     /* Distance instrumentation */
-    if (!DominatorFile.empty()) {
-      std::ifstream domsfile(DominatorFile);
+    if (!OutDirectory.empty()) {
+      std::ifstream domsfile(OutDirectory);
       std::string line;
       while (std::getline(domsfile, line))
         doms.push_back(line);
       domsfile.close();
+    }
+    if (OutDirectory.empty()) {
+      WARNF("No dom file get!");
+    }
     LLVMContext &C = M.getContext();
     IntegerType *Int8Ty  = IntegerType::getInt8Ty(C);
     IntegerType *Int32Ty = IntegerType::getInt32Ty(C);
@@ -424,16 +322,17 @@ bool AFLCoverage::runOnModule(Module &M) {
 #ifdef __x86_64__
     IntegerType *LargestType = Int64Ty;
     ConstantInt *MapCntLoc = ConstantInt::get(LargestType, MAP_SIZE + 8);
-    ConstantInt *MapDomCountLoc = ConstantInt::get(LargestType, MAP_SIZE + 16);
-    ConstantInt *MapDestCountLoc = ConstantInt::get(LargestType, MAP_SIZE + 24);
+    ConstantInt *MapDomCountLoc = ConstantInt::get(Int32Ty, MAP_SIZE + 16);
+    ConstantInt *MapDestCountLoc = ConstantInt::get(Int32Ty, MAP_SIZE + 20);
 #else
     IntegerType *LargestType = Int32Ty;
     ConstantInt *MapCntLoc = ConstantInt::get(LargestType, MAP_SIZE + 4);
-    ConstantInt *MapDomCountLoc = ConstantInt::get(LargestType, MAP_SIZE + 8);
-    ConstantInt *MapDestCountLoc = ConstantInt::get(LargestType, MAP_SIZE + 12);
+    ConstantInt *MapDomCountLoc = ConstantInt::get(Int32Ty, MAP_SIZE + 8);
+    ConstantInt *MapDestCountLoc = ConstantInt::get(Int32Ty, MAP_SIZE + 12);
 #endif
     ConstantInt *MapDistLoc = ConstantInt::get(LargestType, MAP_SIZE);
     ConstantInt *One = ConstantInt::get(LargestType, 1);
+    ConstantInt *One32 = ConstantInt::get(Int32Ty, 1);
 
     /* Get globals for the SHM region and the previous location. Note that
        __afl_prev_loc is thread-local. */
@@ -445,14 +344,14 @@ bool AFLCoverage::runOnModule(Module &M) {
 
     for (auto &F : M) {
 
-      int distance = -1;
-      bool is_target = 0;
-      bool is_doom =0
+      int distance;
+      bool is_target;
+      bool is_dom;
       for (auto &BB : F) {
 
         distance = -1;
         is_target = 0;
-        is_dom =0
+        is_dom =0;
         if (is_aflgo) {
 
           std::string bb_name;
@@ -460,7 +359,7 @@ bool AFLCoverage::runOnModule(Module &M) {
             std::string filename;
             unsigned line;
             getDebugLoc(&I, filename, line);
-
+            // printf("%s,%u",filename.c_str(),line);
             if (filename.empty() || line == 0)
               continue;
             std::size_t found = filename.find_last_of("/\\");
@@ -477,7 +376,7 @@ bool AFLCoverage::runOnModule(Module &M) {
                 unsigned int target_line = atoi(target.substr(pos + 1).c_str());
 
                 if (!target_file.compare(filename) && target_line == line)
-                    is_target = 1
+                    is_target = 1;
             }
 
             bb_name = filename + ":" + std::to_string(line);
@@ -485,7 +384,7 @@ bool AFLCoverage::runOnModule(Module &M) {
           }
 
           if (!bb_name.empty()) {
-            printf("bb name: %s \n",bb_name);
+            // printf("bb name: %s \n",bb_name.c_str());
 
             if (find(doms.begin(), doms.end(), bb_name) != doms.end()) {
               is_dom = 1 ;
@@ -521,28 +420,30 @@ bool AFLCoverage::runOnModule(Module &M) {
         if (is_target){
           
           Value *MapDestCountPtr = IRB.CreateBitCast(
-          IRB.CreateGEP(MapPtr, MapDestCountLoc), Int32ty->getPointerTo());
+          IRB.CreateGEP(MapPtr, MapDestCountLoc), Int32Ty->getPointerTo());
           LoadInst *MapDestCount = IRB.CreateLoad(MapDestCountPtr);
           MapDestCount->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
-          Value *IncrDestCount = IRB.CreateAdd(MapDestCount, One);
-          IRB.CreateStore(IncrDestCount, MapDestCount)
+          Value *IncrDestCount = IRB.CreateAdd(MapDestCount, One32);
+          IRB.CreateStore(IncrDestCount, MapDestCountPtr)
             ->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+
+          des_count++;
         }
         if (is_dom){
           Value *MapDomCountPtr = IRB.CreateBitCast(
-          IRB.CreateGEP(MapPtr, MapDomCountPtr), Int32ty->getPointerTo());
+          IRB.CreateGEP(MapPtr, MapDomCountLoc), Int32Ty->getPointerTo());
           LoadInst *MapDomCount = IRB.CreateLoad(MapDomCountPtr);
           MapDomCount->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
-          Value *IncrDomCount = IRB.CreateAdd(MapDomCount, One);
-          IRB.CreateStore(IncrDestCount, MapDomCount)
+          Value *IncrDomCount = IRB.CreateAdd(MapDomCount, One32);
+          IRB.CreateStore(IncrDomCount, MapDomCountPtr)
             ->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+          dom_count++;
         }
 
         if (distance >= 0) {
 
           ConstantInt *Distance =
               ConstantInt::get(LargestType, (unsigned) distance);
-
 
           /* Add distance to shm[MAPSIZE] */
 
@@ -573,10 +474,9 @@ bool AFLCoverage::runOnModule(Module &M) {
       }
     }
   }
-
   /* Say something nice. */
 
-  if (!is_aflgo_preprocessing && !be_quiet) {
+  if (is_aflgo&&!be_quiet) {
 
     if (!inst_blocks) WARNF("No instrumentation targets found.");
     else OKF("Instrumented %u locations (%s mode, ratio %u%%, dist. ratio %u%%).",
@@ -586,7 +486,8 @@ bool AFLCoverage::runOnModule(Module &M) {
              : ((getenv("AFL_USE_ASAN") || getenv("AFL_USE_MSAN"))
                ? "ASAN/MSAN" : "non-hardened"),
              inst_ratio, dinst_ratio);
-
+    OKF("Instrumented %u doms, %u des.",
+             dom_count, des_count);
   }
 
   return true;
