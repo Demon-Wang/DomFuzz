@@ -466,10 +466,9 @@ bool AFLCoverage::runOnModule(Module &M) {
           Value *IncrCnt = IRB.CreateAdd(MapCnt, One);
           IRB.CreateStore(IncrCnt, MapCntPtr)
               ->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
-
+          inst_blocks++;
         }
 
-        inst_blocks++;
 
       }
     }
