@@ -89,6 +89,8 @@
 #  define EXP_ST static
 #endif /* ^AFL_LIB */
 
+#define TAR_COUNT
+#define DOM_COUNT
 /* Lots of globals, but mostly for the status UI and other things where it
    really makes no sense to haul them around as function parameters. */
 
@@ -205,6 +207,11 @@ EXP_ST u64 total_crashes,             /* Total number of crashes          */
            total_execs,               /* Total execve() calls             */
            slowest_exec_ms,           /* Slowest testcase non hang in ms  */
            start_time,                /* Unix start time (ms)             */
+          #ifdef DOM_COUNT
+            pre_cycle_start_time,
+            pre_cycle_duration,
+            pre_cycle_end_time,
+           #endif
            last_path_time,            /* Time for most recent path (ms)   */
            last_crash_time,           /* Time for most recent crash (ms)  */
            last_hang_time,            /* Time for most recent hang (ms)   */
@@ -290,7 +297,6 @@ struct queue_entry {
 
 #ifdef DOM_COUNT
   u32 dom_count;
-  bool find_dom;
   // EXP_ST u64 last_dom_time;
 #endif
 
@@ -326,9 +332,15 @@ static double min_distance = -1.0;     /* Minimal distance for any input   */
 #ifdef DOM_COUNT
 static u32 cur_dom_count;
 static u32 max_dom_count;
+static u8 find_dom;
 #endif
 
-static u32 t_x = 10;                  /* Time to exploitation (Default: 10 min) */
+#ifdef TAR_COUNT
+static u32 cur_tar_count;
+static u32 total_pass_tar;
+#endif
+
+static u32 t_x = 30;                  /* Time to exploitation (Default: 10 min) */
 
 static u8* (*post_handler)(u8* buf, u32* len);
 
@@ -861,6 +873,13 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
     // last_dom_time = get_cur_time();
   }
 #endif
+
+  
+#ifdef TAR_COUNT
+  if(cur_tar_count)total_pass_tar++;
+#endif
+
+
   if (cur_distance > 0) {
 
     if (max_distance <= 0) {
@@ -1016,22 +1035,38 @@ static inline u8 has_new_bits(u8* virgin_map) {
   u32* total_dom_count = (u32*)(trace_bits + MAP_SIZE + 8);
   #endif
   if (*total_dom_count > 0)
-    cur_dom_count = total_dom_count;
+    cur_dom_count = *total_dom_count;
   else
     cur_dom_count = 0;
-  #ifdef DIRECT_COUNT
-    #ifdef WORD_SIZE_64
-    u32* total_direct_count = (u32*)(trace_bits + MAP_SIZE + 20);
-    #else
-    u32* total_direct_count = (u32*)(trace_bits + MAP_SIZE + 12);
-    #endif
-    if (*total_direct_count > 0)
-      cur_direct_count = total_direct_count;
-      if (!first_direct_path_time)
-        first_direct_path_time = get_cur_time();
-    else
-      cur_direct_count = 0;
+#endif
+
+
+#ifdef DIRECT_COUNT
+  #ifdef WORD_SIZE_64
+  u32* total_direct_count = (u32*)(trace_bits + MAP_SIZE + 20);
+  #else
+  u32* total_direct_count = (u32*)(trace_bits + MAP_SIZE + 12);
   #endif
+  if (*total_direct_count > 0)
+    cur_direct_count = total_direct_count;
+    if (!first_direct_path_time)
+      first_direct_path_time = get_cur_time();
+  else
+    cur_direct_count = 0;
+#endif
+
+
+#ifdef TAR_COUNT
+  #ifdef WORD_SIZE_64
+  u32* total_tar_count = (u32*)(trace_bits + MAP_SIZE + 20);
+  #else
+  u32* total_tar_count = (u32*)(trace_bits + MAP_SIZE + 12);
+  #endif
+  if (*total_tar_count > 0)
+    cur_tar_count = *total_tar_count;
+  else
+  cur_tar_count = 0;
+  // WARNF("cur_tar_count : %d ! ",*total_tar_count);
 #endif
 
 
@@ -2752,42 +2787,6 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
 
     /* This is relevant when test cases are added w/out save_if_interesting */
 
-    if (!queue_cur) {
-
-      /* This calculates cur_distance */
-      has_new_bits(virgin_bits);
-
-      q->distance = cur_distance;
-      if (cur_distance > 0) {
-
-        if (max_distance <= 0) {
-          max_distance = cur_distance;
-          min_distance = cur_distance;
-        }
-        if (cur_distance > max_distance) max_distance = cur_distance;
-        if (cur_distance < min_distance) min_distance = cur_distance;
-
-      }
-
-    }
-
-    #ifdef DOM_COUNT
-    if (!queue_cur) {
-
-      /* This calculates cur_distance */
-      has_new_bits(virgin_bits);
-
-      q->dom_count = cur_dom_count;
-      // if (q->dom_count){
-      //   find_dom = 1;
-      // }
-      if (cur_dom_count > 0) {
-        if (cur_dom_count > max_dom_count) max_dom_count = cur_dom_count;
-      }
-
-    }
-    #endif
-
     if (q->exec_cksum != cksum) {
 
       hnb = has_new_bits(virgin_bits);
@@ -2820,6 +2819,44 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
     }
 
   }
+
+
+    if (!queue_cur) {
+
+      /* This calculates cur_distance */
+      has_new_bits(virgin_bits);
+
+      q->distance = cur_distance;
+      if (cur_distance > 0) {
+
+        if (max_distance <= 0) {
+          max_distance = cur_distance;
+          min_distance = cur_distance;
+        }
+        if (cur_distance > max_distance) max_distance = cur_distance;
+        if (cur_distance < min_distance) min_distance = cur_distance;
+
+      }
+
+
+    #ifdef DOM_COUNT      /* This calculates cur_distance */
+      // has_new_bits(virgin_bits)
+      q->dom_count = cur_dom_count;
+      // if (q->dom_count){
+      //   find_dom = 1;
+      // }
+      if (cur_dom_count > 0) {
+        if (cur_dom_count > max_dom_count) max_dom_count = cur_dom_count;
+      }
+    #endif
+    #ifdef TAR_COUNT
+    if(cur_tar_count)
+    {
+        total_pass_tar++;
+    }
+    #endif
+
+    }
 
   stop_us = get_cur_time_us();
 
@@ -4565,6 +4602,11 @@ static void show_stats(void) {
 
   /* Hallelujah! */
 
+  SAYF("pass_tar_paths:%d \n",total_pass_tar);
+  SAYF("max_dom_count:%d \n",max_dom_count);
+  SAYF("queue_cur->distance:%4lf max_distance: %4lf min_distance: %4lf dom_count:%u.     \n", queue_cur->distance, max_distance, min_distance,queue_cur->dom_count);
+  SAYF("current t_x: %u pre_cycle_duration: %llu min pre_end_time_from_start: %llu .      \n", t_x,pre_cycle_duration/(1000*60),(pre_cycle_end_time-start_time)/(1000*60));
+  SAYF("\n");
   fflush(0);
 
 }
@@ -4973,9 +5015,10 @@ static u32 calculate_score(struct queue_entry* q) {
   }
 
   u64 cur_ms = get_cur_time();
-  u64 t = (cur_ms - start_time) / 1000;
+  u64 t = (cur_ms - pre_cycle_end_time ) / 1000;
   double progress_to_tx = ((double) t) / ((double) t_x * 60.0);
-
+  // fprintf(stderr, "[Time %llu] progress_to_tx: %4lf, t_x:%u",t,progress_to_tx,t_x);
+  // getchar();
   double T;
 
   //TODO Substitute functions of exp and log with faster bitwise operations on integers
@@ -5010,24 +5053,24 @@ static u32 calculate_score(struct queue_entry* q) {
   }
 
   double power_factor = 1.0;
-  if (q->distance > 0) {
+  // if (q->distance > 0) {
+ if (max_dom_count) {
 
-    double normalized_d = 0; // when "max_distance == min_distance", we set the normalized_d to 0 so that we can sufficiently explore those testcases whose distance >= 0.
-    if (max_distance != min_distance)
-      normalized_d = (q->distance - min_distance) / (max_distance - min_distance);
-
-    if (normalized_d >= 0) {
-      #ifdef DOM_COUNT
-      if(max_dom_count){
-        normalized_dom = q->dom_count / max_dom_count;
-        double p = (normalized_dom*(max_dom_count/(max_dom_count+1))+(1.0 - normalized_d)/(max_dom_count+1)) * (1.0 - T) + 0.5 * T;
-      }
-      else
-      #endif
-      double p = (1.0 - normalized_d) * (1.0 - T) + 0.5 * T;
-      power_factor = pow(2.0, 2.0 * (double) log2(MAX_FACTOR) * (p - 0.5));
-
-    }// else WARNF ("Normalized distance negative: %f", normalized_d);
+    double normalized_d; // when "max_distance == min_distance", we set the normalized_d to 0 so that we can sufficiently explore those testcases whose distance >= 0.
+    double normalized_dom;
+    double p;
+    if( q->distance > 0 ){
+      normalized_d = 0;
+      if (max_distance != min_distance)
+        normalized_d = (q->distance - min_distance) / (max_distance - min_distance);
+    }else
+      normalized_d = 1;
+    #ifdef DOM_COUNT
+    normalized_dom = q->dom_count / max_dom_count;
+    p = (normalized_dom*(max_dom_count/(max_dom_count+1))+(1.0 - normalized_d)/(max_dom_count+1)) * (1.0 - T) + 0.5 * T;
+    #endif
+    // p = (1.0 - normalized_d) * (1.0 - T) + 0.5 * T;
+    power_factor = pow(2.0, 2.0 * (double) log2(MAX_FACTOR) * (p - 0.5));
 
   }
 
@@ -5038,7 +5081,7 @@ static u32 calculate_score(struct queue_entry* q) {
   if (perf_score > HAVOC_MAX_MULT * 100) perf_score = HAVOC_MAX_MULT * 100;
 
   /* AFLGO-DEBUGGING */
-  // fprintf(stderr, "[Time %llu] q->distance: %4lf, max_distance: %4lf min_distance: %4lf, T: %4.3lf, power_factor: %4.3lf, adjusted perf_score: %4d\n", t, q->distance, max_distance, min_distance, T, power_factor, perf_score);
+  fprintf(stderr, "[Time %llu] q->distance: %4lf, max_distance: %4lf min_distance: %4lf, T: %4.3lf, power_factor: %4.3lf, adjusted perf_score: %4d\n", t, q->distance, max_distance, min_distance, T, power_factor, perf_score);
 
   return perf_score;
 
@@ -8033,10 +8076,6 @@ int main(int argc, char** argv) {
   u8  *extras_dir = 0;
   u8  mem_limit_given = 0;
   u8  exit_1 = !!getenv("AFL_BENCH_JUST_ONE");
-  #ifdef DOM_COUNT
-  u64 pre_cycle_start_time;
-  u64 pre_cycle_duration;
-  #endif
   char** use_argv;
 
   struct timeval tv;
@@ -8387,7 +8426,7 @@ int main(int argc, char** argv) {
     if (stop_soon) goto stop_fuzzing;
   }
   #ifdef DOM_COUNT
-  bool first = true;
+  u8 first = 1;
   #endif
   while (1) {
 
@@ -8396,25 +8435,34 @@ int main(int argc, char** argv) {
     cull_queue();
 
     if (!queue_cur) {
+
       #ifdef DOM_COUNT
+      fprintf(stderr, "before queue: tx:%u                                                                   ",t_x);
       if(first)
       {
-        first = false;
+        pre_cycle_end_time = start_time;
+        first = 0;
       }
       else{
-        
-        
+        pre_cycle_end_time = get_cur_time();
+        pre_cycle_duration = pre_cycle_end_time - pre_cycle_start_time;
           if (find_dom)
           {
-            t_x = (get_cur_time()-start_time)/(1000*60);
+            
+            t_x = pre_cycle_duration/(1000*60*2)+5;
             find_dom = 0;
+            // fprintf(stderr, "after queue, find dom  tx:%u                                                    ",t_x);
           }
           else
           {
-              pre_cycle_duration = get_cur_time() - pre_cycle_start_time;
-              t_x = get_cur_time() + pre_cycle_duration/ (2*1000*60);
+              t_x = (pre_cycle_duration*2)/(1000*60)+10;
+              // t_x = ((get_cur_time()-start_time) + pre_cycle_duration/2 )/ (1000*60);
+      // fprintf(stderr, "no dom find! after queue: tx:%u ,pre_cycle_duration: %llu                                                     ",t_x,pre_cycle_duration/1000);
+      // getchar();
           }
       }
+      
+
       pre_cycle_start_time = get_cur_time();
       #endif
 

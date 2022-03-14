@@ -331,6 +331,25 @@ namespace {
 						}
 
 					bool runOnModule(Module &M) override {
+    // for (auto &F : M) {
+    //   for (auto &BB : F) {
+    //       std::string bb_name;
+    //       for (auto &I : BB) {
+    //         std::string filename;
+    //         unsigned line;
+    //         getDebugLoc(&I, filename, line);
+    //         if (filename.empty() || line == 0)
+    //           continue;
+    //         std::size_t found = filename.find_last_of("/\\");
+    //         if (found != std::string::npos)
+    //           filename = filename.substr(found + 1);
+    //         bb_name = filename + ":" + std::to_string(line);
+	// 			printf("bb name: %s \n",bb_name.c_str());
+	// 		break;
+	// 	}
+	// 	}
+	// 	}
+
 
 						ModuleSanitizerCoverage ModuleSancov(Options);
 						// , Allowlist.get(), Blocklist.get());
